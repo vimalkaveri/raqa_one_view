@@ -34,6 +34,47 @@ class SettingScreen extends StatefulWidget {
 }
 
 class _SettingScreenState extends State<SettingScreen> {
+  static const double _pinSizeStep = 2.0;
+
+  final FocusNode _pinSizeFocusNode =
+      FocusNode(debugLabel: 'pinSizeControl');
+  bool _pinSizeFocused = false;
+
+  @override
+  void dispose() {
+    _pinSizeFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _adjustPinSize(double delta) {
+    final next = (AppSettings.pinSize + delta)
+        .clamp(AppSettings.minPinSize, AppSettings.maxPinSize);
+    setState(() => AppSettings.pinSize = next);
+    AppSettings.setPinSize(next);
+  }
+
+  /// Only handles Left/Right (decrease/increase). Up/Down are deliberately
+  /// left as `ignored` — Flutter's built-in Slider treats all four arrow
+  /// keys as +/- once it has D-pad focus, which traps a remote/D-pad user
+  /// on this one control with no way to reach Priority, Backup, etc. above
+  /// or below it. Returning `ignored` here lets Up/Down fall through to
+  /// normal directional focus traversal instead, same as every other
+  /// focusable control on this screen.
+  KeyEventResult _handlePinSizeKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _adjustPinSize(_pinSizeStep);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _adjustPinSize(-_pinSizeStep);
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -70,6 +111,69 @@ class _SettingScreenState extends State<SettingScreen> {
               await AppSettings.setPriorityEnabled(value);
               if (mounted) setState(() {});
             },
+          ),
+          const Divider(color: Colors.white24, height: 1),
+
+          const _SectionHeader('Dashboard'),
+          Focus(
+            focusNode: _pinSizeFocusNode,
+            onKeyEvent: _handlePinSizeKey,
+            onFocusChange: (focused) =>
+                setState(() => _pinSizeFocused = focused),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color:
+                      _pinSizeFocused ? Colors.tealAccent : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.control_camera, color: Colors.tealAccent),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Sensor pin size',
+                            style: TextStyle(color: Colors.white)),
+                        SizedBox(height: 2),
+                        Text(
+                          'Use Left / Right to adjust',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon:
+                        const Icon(Icons.chevron_left, color: Colors.white70),
+                    onPressed: () => _adjustPinSize(-_pinSizeStep),
+                  ),
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      '${AppSettings.pinSize.round()}px',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.tealAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon:
+                        const Icon(Icons.chevron_right, color: Colors.white70),
+                    onPressed: () => _adjustPinSize(_pinSizeStep),
+                  ),
+                ],
+              ),
+            ),
           ),
           const Divider(color: Colors.white24, height: 1),
 

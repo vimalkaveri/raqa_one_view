@@ -21,9 +21,17 @@ class AppSettings {
   static bool priorityEnabled = true;
   static String password = '';
 
+  /// Diameter (in logical pixels) of a sensor pin on the Dashboard floor
+  /// plan. Adjustable from Settings so it can be tuned for screen size /
+  /// viewing distance without touching code.
+  static double pinSize = 44.0;
+  static const double minPinSize = 18.0;
+  static const double maxPinSize = 72.0;
+
   static const _kSiren = 'appSirenEnabled';
   static const _kPriorityEnabled = 'appPriorityEnabled';
   static const _kPassword = 'appPassword';
+  static const _kPinSize = 'appPinSize';
 
   ////////////////////////////////////////////////////////////
   // LOAD
@@ -35,6 +43,7 @@ class AppSettings {
     sirenEnabled = prefs.getBool(_kSiren) ?? sirenEnabled;
     priorityEnabled = prefs.getBool(_kPriorityEnabled) ?? priorityEnabled;
     password = prefs.getString(_kPassword) ?? password;
+    pinSize = prefs.getDouble(_kPinSize) ?? pinSize;
   }
 
   ////////////////////////////////////////////////////////////
@@ -58,5 +67,11 @@ class AppSettings {
     password = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kPassword, value);
+  }
+
+  static Future<void> setPinSize(double value) async {
+    pinSize = value.clamp(minPinSize, maxPinSize);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kPinSize, pinSize);
   }
 }

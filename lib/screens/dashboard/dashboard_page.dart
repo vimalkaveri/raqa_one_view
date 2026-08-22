@@ -1265,11 +1265,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildPin(PlacedSensor sensor, Size canvasSize) {
-    const pinSize = 44.0;
+    // Pulled live from AppSettings (not cached) so a change made on the
+    // Settings screen takes effect the next time this rebuilds — no need
+    // to reopen the Dashboard.
+    final pinSize = AppSettings.pinSize;
+    final iconSize = pinSize * 0.5;
     // Bounding box for the ripple rings. Always allocated at this size
     // (even when not on fire) so the pin's anchor point doesn't shift
     // when it enters/exits a Fire state.
-    const rippleBoxSize = pinSize * 3;
+    final rippleBoxSize = pinSize * 3;
 
     final status = _statusFor(sensor);
     final color = _colorFor(status);
@@ -1291,7 +1295,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: AnimatedBuilder(
                 animation: _rippleController,
                 builder: (context, _) => CustomPaint(
-                  size: const Size(rippleBoxSize, rippleBoxSize),
+                  size: Size(rippleBoxSize, rippleBoxSize),
                   painter: _FireRipplePainter(
                     progress: _rippleController.value,
                     color: Colors.redAccent,
@@ -1353,7 +1357,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     child: Icon(
                       _iconFor(sensor, status),
                       color: Colors.white,
-                      size: 22,
+                      size: iconSize,
                     ),
                   ),
                 ),
