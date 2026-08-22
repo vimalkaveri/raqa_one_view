@@ -1,0 +1,62 @@
+// ==========================
+// File: services/settings/app_settings.dart
+//
+// Small persisted store for app-level (not per-slave) settings that are
+// controlled from the Settings screen:
+//   - sirenEnabled     : last commanded siren on/off state
+//   - priorityEnabled  : whether the per-slave "priority" badge/behaviour
+//                         (see ModbusRtu.slavePriorityMap) is active
+//   - password         : simple app-lock password (plain text — this app
+//                         has no login/auth backend, so this is a local
+//                         PIN-style gate only, not a security boundary)
+//
+// Static, like ModbusRtu, so any screen can read/write it without needing
+// to be handed an instance.
+// ==========================
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AppSettings {
+  static bool sirenEnabled = false;
+  static bool priorityEnabled = true;
+  static String password = '';
+
+  static const _kSiren = 'appSirenEnabled';
+  static const _kPriorityEnabled = 'appPriorityEnabled';
+  static const _kPassword = 'appPassword';
+
+  ////////////////////////////////////////////////////////////
+  // LOAD
+  ////////////////////////////////////////////////////////////
+
+  static Future<void> loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    sirenEnabled = prefs.getBool(_kSiren) ?? sirenEnabled;
+    priorityEnabled = prefs.getBool(_kPriorityEnabled) ?? priorityEnabled;
+    password = prefs.getString(_kPassword) ?? password;
+  }
+
+  ////////////////////////////////////////////////////////////
+  // SAVE (individual setters persist immediately so a screen doesn't
+  // need to remember to call a bulk save)
+  ////////////////////////////////////////////////////////////
+
+  static Future<void> setSirenEnabled(bool value) async {
+    sirenEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kSiren, value);
+  }
+
+  static Future<void> setPriorityEnabled(bool value) async {
+    priorityEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPriorityEnabled, value);
+  }
+
+  static Future<void> setPassword(String value) async {
+    password = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kPassword, value);
+  }
+}
