@@ -56,6 +56,40 @@ import 'fire_alert_dashboard.dart';
 
 enum _PinLiveStatus { healthy, fault, fire, recovered, disabled, offline, unknown }
 
+/// Paints two staggered expanding-and-fading rings, used behind any pin
+/// currently reporting Fire. `progress` is the 0..1 animation value from
+/// _rippleController; the 0.5 phase offset gives a continuous "radar"
+/// ripple rather than a single ring popping in and out.
+class _FireRipplePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _FireRipplePainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final maxRadius = size.shortestSide / 2;
+
+    for (final phase in [0.0, 0.5]) {
+      final t = (progress + phase) % 1.0;
+      final radius = maxRadius * (0.25 + t * 0.75);
+      final opacity = (1 - t) * 0.55;
+
+      final paint = Paint()
+        ..color = color.withOpacity(opacity.clamp(0.0, 1.0))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FireRipplePainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
+}
+
 class DashboardScreen extends StatefulWidget {
   final Rs485Service manager;
 
@@ -65,7 +99,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with TickerProviderStateMixin {
   final ConfigurationStore _store = ConfigurationStore.instance;
 
   // Which floor tab is currently being viewed. Independent of
@@ -110,6 +145,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isMuted = false;
 
   Timer? _tickTimer;
+
+  // Drives the expanding ripple rings drawn behind any pin currently
+  // reporting Fire. Runs continuously and independently of _tickTimer so
+  // the ripple animates smoothly at frame rate rather than jumping once
+  // a second.
+  late final AnimationController _rippleController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..repeat();
 
   // First-seen timestamp for each pin currently reporting Fire, keyed the
   // same way as _pinFocusNodes ("slaveId_zoneAddress"). This is what the
@@ -159,6 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _store.removeListener(_onStoreChanged);
     _tickTimer?.cancel();
+    _rippleController.dispose();
     _buzzerPlayer.dispose();
     _pinController.dispose();
     _floorTabScrollController.dispose();
@@ -1221,6 +1266,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildPin(PlacedSensor sensor, Size canvasSize) {
     const pinSize = 44.0;
+    // Bounding box for the ripple rings. Always allocated at this size
+    // (even when not on fire) so the pin's anchor point doesn't shift
+    // when it enters/exits a Fire state.
+    const rippleBoxSize = pinSize * 3;
+
     final status = _statusFor(sensor);
     final color = _colorFor(status);
     final isFire = status == _PinLiveStatus.fire;
@@ -1229,68 +1279,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Positioned(
       key: ValueKey('pin_${_pinKey(sensor)}'),
-      left: sensor.xFraction * canvasSize.width - pinSize / 2,
-      top: sensor.yFraction * canvasSize.height - pinSize / 2,
-      child: Focus(
-        focusNode: _focusNodeFor(sensor),
-        onFocusChange: (focused) {
-          if (!mounted) return;
-          setState(() => _focusedSensor = focused ? sensor : null);
-        },
-        onKeyEvent: (node, event) {
-          if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          final key = event.logicalKey;
-          if (key == LogicalKeyboardKey.enter ||
-              key == LogicalKeyboardKey.select ||
-              key == LogicalKeyboardKey.numpadEnter) {
-            _toggleSensorSelection(sensor);
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: GestureDetector(
-          onTap: () => _toggleSensorSelection(sensor),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: Tooltip(
-              message:
-                  '${sensor.name} (${sensor.zoneLabel})\n${sensor.location}\n${status.name}',
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: pinSize,
-                height: pinSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color,
-                  border: isSelected
-                      ? Border.all(color: Colors.white, width: 3)
-                      : isFocused
-                          ? Border.all(color: Colors.tealAccent, width: 2)
-                          : null,
-                  boxShadow: [
-                    if (isFire)
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.6),
-                        blurRadius: 16,
-                        spreadRadius: 4,
-                      ),
-                    if (isFocused && !isSelected)
-                      BoxShadow(
-                        color: Colors.tealAccent.withOpacity(0.5),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                  ],
+      left: sensor.xFraction * canvasSize.width - rippleBoxSize / 2,
+      top: sensor.yFraction * canvasSize.height - rippleBoxSize / 2,
+      width: rippleBoxSize,
+      height: rippleBoxSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (isFire)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _rippleController,
+                builder: (context, _) => CustomPaint(
+                  size: const Size(rippleBoxSize, rippleBoxSize),
+                  painter: _FireRipplePainter(
+                    progress: _rippleController.value,
+                    color: Colors.redAccent,
+                  ),
                 ),
-                child: Icon(
-                  _iconFor(sensor, status),
-                  color: Colors.white,
-                  size: 22,
+              ),
+            ),
+          Focus(
+            focusNode: _focusNodeFor(sensor),
+            onFocusChange: (focused) {
+              if (!mounted) return;
+              setState(() => _focusedSensor = focused ? sensor : null);
+            },
+            onKeyEvent: (node, event) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              final key = event.logicalKey;
+              if (key == LogicalKeyboardKey.enter ||
+                  key == LogicalKeyboardKey.select ||
+                  key == LogicalKeyboardKey.numpadEnter) {
+                _toggleSensorSelection(sensor);
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: GestureDetector(
+              onTap: () => _toggleSensorSelection(sensor),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Tooltip(
+                  message:
+                      '${sensor.name} (${sensor.zoneLabel})\n${sensor.location}\n${status.name}',
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: pinSize,
+                    height: pinSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color,
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 3)
+                          : isFocused
+                              ? Border.all(color: Colors.tealAccent, width: 2)
+                              : null,
+                      boxShadow: [
+                        if (isFire)
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.6),
+                            blurRadius: 16,
+                            spreadRadius: 4,
+                          ),
+                        if (isFocused && !isSelected)
+                          BoxShadow(
+                            color: Colors.tealAccent.withOpacity(0.5),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                      ],
+                    ),
+                    child: Icon(
+                      _iconFor(sensor, status),
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
