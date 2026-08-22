@@ -37,6 +37,7 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:vector_graphics/vector_graphics.dart';
 
@@ -80,6 +81,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   PlacedSensor? _selectedSensor;
 
+  // Remote/keyboard focus tracking for pins on the floor-plan canvas.
+  // Touch/mouse continue to use onTap; a D-pad/keyboard user instead
+  // moves focus between pins (Flutter's built-in directional-focus
+  // traversal handles that using each pin's on-screen position) and
+  // presses Enter/Select to activate the focused pin, via the same
+  // _toggleSensorSelection path a tap uses.
+  //
+  // Keyed by "slaveId_zoneAddress" (stable identity for a pin) rather
+  // than the PlacedSensor instance itself, since edits replace the
+  // instance via copyWith while the underlying pin stays the same.
+  final Map<String, FocusNode> _pinFocusNodes = {};
+  PlacedSensor? _focusedSensor;
+
   DateTime _now = DateTime.now();
 
   // ---------------- LOCK ----------------
@@ -97,6 +111,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Timer? _tickTimer;
 
+  // First-seen timestamp for each pin currently reporting Fire, keyed the
+  // same way as _pinFocusNodes ("slaveId_zoneAddress"). This is what the
+  // Fire Alert panel's "Time" field shows — the moment that alert started,
+  // not the live clock — so it stays fixed instead of ticking every second.
+  final Map<String, DateTime> _fireAlertStartTimes = {};
+
   @override
   void initState() {
     super.initState();
@@ -111,8 +131,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() => _now = DateTime.now());
         _updateBuzzer();
+        _updateFireAlertStartTimes();
       }
     });
+  }
+
+  /// Records the moment each pin first reports Fire, and clears it again
+  /// once that pin is no longer on fire (so a later, separate alert on the
+  /// same sensor gets its own fresh timestamp).
+  void _updateFireAlertStartTimes() {
+    final liveFireKeys = <String>{};
+
+    for (final floor in _store.history) {
+      for (final sensor in floor.sensors) {
+        if (_statusFor(sensor) == _PinLiveStatus.fire) {
+          final key = _pinKey(sensor);
+          liveFireKeys.add(key);
+          _fireAlertStartTimes.putIfAbsent(key, () => DateTime.now());
+        }
+      }
+    }
+
+    _fireAlertStartTimes.removeWhere((key, _) => !liveFireKeys.contains(key));
   }
 
   @override
@@ -122,7 +162,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _buzzerPlayer.dispose();
     _pinController.dispose();
     _floorTabScrollController.dispose();
+    for (final node in _pinFocusNodes.values) {
+      node.dispose();
+    }
     super.dispose();
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// PIN FOCUS / SELECTION (shared by remote D-pad and touch/mouse)
+  ////////////////////////////////////////////////////////////
+
+  String _pinKey(PlacedSensor sensor) =>
+      '${sensor.slaveId}_${sensor.zoneAddress}';
+
+  FocusNode _focusNodeFor(PlacedSensor sensor) {
+    return _pinFocusNodes.putIfAbsent(
+      _pinKey(sensor),
+      () => FocusNode(debugLabel: 'pin_${_pinKey(sensor)}'),
+    );
+  }
+
+  void _toggleSensorSelection(PlacedSensor sensor) {
+    setState(() {
+      _selectedSensor = (_selectedSensor == sensor) ? null : sensor;
+    });
   }
 
   void _onStoreChanged() {
@@ -135,7 +198,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _selectedAlertFloorIndex =
           _store.history.isEmpty ? 0 : _store.history.length - 1;
     }
+    _prunePinFocusNodes();
     setState(() {});
+  }
+
+  /// Drops focus nodes for pins that no longer exist on any floor (sensor
+  /// removed via the Configuration screen), so the map doesn't grow
+  /// unbounded across a long-lived Dashboard session.
+  void _prunePinFocusNodes() {
+    final liveKeys = <String>{
+      for (final floor in _store.history)
+        for (final sensor in floor.sensors) _pinKey(sensor),
+    };
+
+    final staleKeys =
+        _pinFocusNodes.keys.where((k) => !liveKeys.contains(k)).toList();
+
+    for (final key in staleKeys) {
+      _pinFocusNodes.remove(key)?.dispose();
+    }
   }
 
   ////////////////////////////////////////////////////////////
@@ -480,7 +561,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: _alertDetailText(
                     'Time',
-                    '${_two(_now.hour)}:${_two(_now.minute)}:${_two(_now.second)}',
+                    _formatAlertStartTime(sensor),
                   ),
                 ),
                 _statChip(
@@ -490,6 +571,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
     );
+  }
+
+  String _formatAlertStartTime(PlacedSensor sensor) {
+    final start = _fireAlertStartTimes[_pinKey(sensor)];
+    if (start == null) return '-';
+    return '${_two(start.hour)}:${_two(start.minute)}:${_two(start.second)}';
   }
 
   Widget _alertDetailText(String label, String value) {
@@ -1042,6 +1129,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final Map<String, Size> _sizeCache = {};
 
+  // Cache the actual SVG widget per floor image path. Without this,
+  // SvgPicture.file(...) was being constructed fresh on every rebuild —
+  // and since the Dashboard rebuilds every second (see _tickTimer), that
+  // meant re-reading and re-parsing the floor-plan SVG off disk once a
+  // second, forever, for as long as the Dashboard was open. That's
+  // expensive work on the same UI isolate that also drives the RS-485
+  // poll timer and serial-port input stream, so it could visibly delay
+  // register updates while this screen was showing — even though actual
+  // polling never stopped.
+  final Map<String, Widget> _svgCache = {};
+
+  Widget _svgFor(String path) {
+    return _svgCache.putIfAbsent(
+      path,
+      () => SvgPicture.file(File(path), fit: BoxFit.fill),
+    );
+  }
+
   Future<Size> _resolveImageSize(String path) async {
     final cached = _sizeCache[path];
     if (cached != null) return cached;
@@ -1057,50 +1162,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final floor = floorOverride ?? _currentFloor;
     if (floor == null) return _buildEmptyState();
 
+    // If we've already resolved this floor's image size, skip the
+    // FutureBuilder round-trip entirely and render synchronously — avoids
+    // a one-frame "waiting" flicker on every per-second rebuild.
+    final cachedSize = _sizeCache[floor.imagePath];
+    if (cachedSize != null) {
+      return _buildFloorImage(floor, cachedSize);
+    }
+
     return FutureBuilder<Size>(
       future: _resolveImageSize(floor.imagePath),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+        return _buildFloorImage(floor, snapshot.data!);
+      },
+    );
+  }
 
-        final imgSize = snapshot.data!;
-        final aspectRatio = imgSize.width / imgSize.height;
+  Widget _buildFloorImage(SiteImageConfig floor, Size imgSize) {
+    final aspectRatio = imgSize.width / imgSize.height;
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: InteractiveViewer(
-              minScale: 1,
-              maxScale: 4,
-              child: AspectRatio(
-                aspectRatio: aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            SvgPicture.file(File(floor.imagePath), fit: BoxFit.fill),
-                            for (final sensor in floor.sensors)
-                              _buildPin(sensor, constraints.biggest),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: InteractiveViewer(
+          minScale: 1,
+          maxScale: 4,
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _svgFor(floor.imagePath),
+                        for (final sensor in floor.sensors)
+                          _buildPin(sensor, constraints.biggest),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1110,41 +1225,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final color = _colorFor(status);
     final isFire = status == _PinLiveStatus.fire;
     final isSelected = _selectedSensor == sensor;
+    final isFocused = _focusedSensor == sensor;
 
     return Positioned(
+      key: ValueKey('pin_${_pinKey(sensor)}'),
       left: sensor.xFraction * canvasSize.width - pinSize / 2,
       top: sensor.yFraction * canvasSize.height - pinSize / 2,
-      child: GestureDetector(
-        onTap: () => setState(() {
-          _selectedSensor = isSelected ? null : sensor;
-        }),
-        child: Tooltip(
-          message:
-              '${sensor.name} (${sensor.zoneLabel})\n${sensor.location}\n${status.name}',
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: pinSize,
-            height: pinSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 3)
-                  : null,
-              boxShadow: isFire
-                  ? [
+      child: Focus(
+        focusNode: _focusNodeFor(sensor),
+        onFocusChange: (focused) {
+          if (!mounted) return;
+          setState(() => _focusedSensor = focused ? sensor : null);
+        },
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.numpadEnter) {
+            _toggleSensorSelection(sensor);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          onTap: () => _toggleSensorSelection(sensor),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Tooltip(
+              message:
+                  '${sensor.name} (${sensor.zoneLabel})\n${sensor.location}\n${status.name}',
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: pinSize,
+                height: pinSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: isSelected
+                      ? Border.all(color: Colors.white, width: 3)
+                      : isFocused
+                          ? Border.all(color: Colors.tealAccent, width: 2)
+                          : null,
+                  boxShadow: [
+                    if (isFire)
                       BoxShadow(
                         color: Colors.red.withOpacity(0.6),
                         blurRadius: 16,
                         spreadRadius: 4,
                       ),
-                    ]
-                  : null,
-            ),
-            child: Icon(
-              _iconFor(sensor, status),
-              color: Colors.white,
-              size: 22,
+                    if (isFocused && !isSelected)
+                      BoxShadow(
+                        color: Colors.tealAccent.withOpacity(0.5),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                  ],
+                ),
+                child: Icon(
+                  _iconFor(sensor, status),
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
             ),
           ),
         ),

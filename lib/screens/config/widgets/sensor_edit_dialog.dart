@@ -13,6 +13,7 @@
 // ==========================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../services/config/placed_sensor.dart';
 import '../../../services/config/sensor_type.dart';
@@ -71,19 +72,13 @@ Future<PlacedSensor?> showAssignSensorDialog(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        DropdownButtonFormField<int>(
+                        _TvSelectField<int>(
+                          label: 'Device',
+                          autofocus: true,
+                          options: availableSlaveIds,
                           value: selectedSlaveId,
-                          decoration:
-                              const InputDecoration(labelText: 'Device'),
-                          items: [
-                            for (final id in availableSlaveIds)
-                              DropdownMenuItem(
-                                value: id,
-                                child: Text(
-                                  'Slave $id - ${ModbusRtu.slaveModelMap[id] ?? ""}',
-                                ),
-                              ),
-                          ],
+                          labelBuilder: (id) =>
+                              'Slave $id - ${ModbusRtu.slaveModelMap[id] ?? ""}',
                           onChanged: (value) {
                             setDialogState(() {
                               selectedSlaveId = value;
@@ -97,25 +92,20 @@ Future<PlacedSensor?> showAssignSensorDialog(
                           },
                         ),
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<int>(
+                        _TvSelectField<int>(
+                          label: 'Zone',
+                          options: [for (final z in zones) z.address],
                           value: selectedZone?.address,
-                          decoration: const InputDecoration(labelText: 'Zone'),
-                          items: [
-                            for (final zone in zones)
-                              DropdownMenuItem(
-                                value: zone.address,
-                                child: Text(zone.label),
-                              ),
-                          ],
-                          onChanged: zones.isEmpty
-                              ? null
-                              : (value) {
-                                  setDialogState(() {
-                                    selectedZone = zones
-                                        .firstWhere((z) => z.address == value);
-                                    nameController.text = defaultName();
-                                  });
-                                },
+                          labelBuilder: (address) => zones
+                              .firstWhere((z) => z.address == address)
+                              .label,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedZone = zones
+                                  .firstWhere((z) => z.address == value);
+                              nameController.text = defaultName();
+                            });
+                          },
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -267,4 +257,166 @@ Future<PlacedSensor?> showEditSensorDialog(
       );
     },
   );
+}
+
+////////////////////////////////////////////////////////////
+/// TV-REMOTE-FRIENDLY SELECT FIELD
+///
+/// DropdownButtonFormField opens its options in a separate popup route,
+/// which is unreliable to reach with a D-pad on many Android TV boxes —
+/// and once that popup is dismissed, focus can fail to return cleanly to
+/// the dialog, which also breaks navigating on to fields below it (e.g.
+/// Location). This avoids the popup entirely: the current value is shown
+/// in place, and Left/Right (D-pad, keyboard, or the on-screen chevrons
+/// for mouse/touch) steps through [options] without ever leaving the
+/// dialog's focus scope.
+////////////////////////////////////////////////////////////
+
+class _TvSelectField<T> extends StatefulWidget {
+  final String label;
+  final List<T> options;
+  final T? value;
+  final String Function(T) labelBuilder;
+  final ValueChanged<T?> onChanged;
+  final bool autofocus;
+
+  const _TvSelectField({
+    super.key,
+    required this.label,
+    required this.options,
+    required this.value,
+    required this.labelBuilder,
+    required this.onChanged,
+    this.autofocus = false,
+  });
+
+  @override
+  State<_TvSelectField<T>> createState() => _TvSelectFieldState<T>();
+}
+
+class _TvSelectFieldState<T> extends State<_TvSelectField<T>> {
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  int get _currentIndex {
+    final value = widget.value;
+    if (value == null) return -1;
+    return widget.options.indexOf(value);
+  }
+
+  void _step(int delta) {
+    if (widget.options.isEmpty) return;
+    final current = _currentIndex;
+    final nextIndex = current < 0
+        ? 0
+        : (current + delta).clamp(0, widget.options.length - 1);
+    if (nextIndex == current) return;
+    widget.onChanged(widget.options[nextIndex]);
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _step(-1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _step(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  // Bare GestureDetector (not IconButton) on purpose — it lets mouse/touch
+  // still nudge the value without adding an extra focus stop that would
+  // otherwise sit between this field and its neighbours during D-pad
+  // navigation.
+  Widget _chevron(IconData icon, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor:
+            onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          child: Icon(
+            icon,
+            size: 20,
+            color: onTap == null ? Colors.grey.shade300 : Colors.black54,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = widget.options.isEmpty;
+    final index = _currentIndex;
+    final currentLabel = (widget.value != null)
+        ? widget.labelBuilder(widget.value as T)
+        : (disabled ? 'None available' : '');
+
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: widget.autofocus,
+      onFocusChange: (focused) {
+        if (!mounted) return;
+        setState(() => _focused = focused);
+      },
+      onKeyEvent: disabled ? null : _onKeyEvent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: _focused ? Colors.teal : Colors.grey.shade400,
+            width: _focused ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            _chevron(
+              Icons.chevron_left,
+              (disabled || index <= 0) ? null : () => _step(-1),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.label,
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                  Text(
+                    currentLabel,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: disabled ? Colors.grey : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _chevron(
+              Icons.chevron_right,
+              (disabled || index >= widget.options.length - 1)
+                  ? null
+                  : () => _step(1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

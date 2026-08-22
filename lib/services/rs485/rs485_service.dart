@@ -46,7 +46,7 @@ class Rs485Service {
   /// SensorModel.isOffline check.
   final Map<int, DateTime> slaveLastSeen = {};
 
-  static const Duration offlineThreshold = Duration(seconds: 90);
+  static const Duration offlineThreshold = Duration(seconds: 60);
 
   bool isSlaveOffline(int slaveId) {
     final seen = slaveLastSeen[slaveId];
