@@ -31,6 +31,7 @@ import '../../services/config/placed_sensor.dart';
 import '../../services/config/sensor_type.dart';
 import '../../services/config/sensor_zones.dart';
 import '../../services/rs485/modbus_rtu.dart';
+import '../../utils/app_theme.dart';
 import 'widgets/image_history_sheet.dart';
 import 'widgets/sensor_edit_dialog.dart';
 
@@ -327,12 +328,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
     final activeConfig = _store.active;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F1F6),
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text('Configuration'),
-        backgroundColor: const Color(0xFFF4F1F6),
-        foregroundColor: Colors.black87,
-        elevation: 0,
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
@@ -380,7 +378,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Widget _buildSensorRail() {
     return Container(
       width: 96,
-      color: const Color(0xFFECE7EF),
+      color: AppTheme.panel,
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
@@ -492,7 +490,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
     return Container(
       width: 260,
-      color: const Color(0xFFECE7EF),
+      color: AppTheme.panel,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(24),
       child: Text(
@@ -503,7 +501,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             : 'Placing a ${armed.label} sensor.\n\nUse the D-pad to move '
                 'the crosshair, Select to drop it here, Back to cancel.',
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.black54, fontSize: 15, height: 1.4),
+        style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, height: 1.4),
       ),
     );
   }

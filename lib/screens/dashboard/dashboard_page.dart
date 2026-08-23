@@ -51,6 +51,7 @@ import '../../services/config/site_image_config.dart';
 import '../../services/rs485/modbus_rtu.dart';
 import '../../services/rs485/rs485_service.dart';
 import '../../services/settings/app_settings.dart';
+import '../../utils/app_theme.dart';
 import 'normal_dashboard.dart';
 import 'fire_alert_dashboard.dart';
 
@@ -439,16 +440,16 @@ class _DashboardScreenState extends State<DashboardScreen>
           children: [
             const Icon(Icons.lock, size: 56, color: Colors.tealAccent),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Dashboard Locked',
-              style: TextStyle(color: Colors.white, fontSize: 20),
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 20),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _pinController,
               obscureText: true,
               autofocus: true,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Password',
                 errorText: _pinError,
@@ -476,7 +477,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final fireAlert = _anyFireAnywhere;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: _locked
             ? _buildLockScreen()
@@ -565,16 +566,16 @@ class _DashboardScreenState extends State<DashboardScreen>
       height: 68,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFF161616),
-        border: Border(
+      decoration: BoxDecoration(
+        color: AppTheme.panel,
+        border: const Border(
           top: BorderSide(color: Colors.redAccent),
         ),
       ),
       child: sensor == null
-          ? const Text(
+          ? Text(
               'Fire device information unavailable',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -633,8 +634,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white38,
+            style: TextStyle(
+              color: AppTheme.textSecondary,
               fontSize: 10,
             ),
           ),
@@ -643,8 +644,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             value.isEmpty ? '-' : value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -665,14 +666,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: AppTheme.textPrimary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: (color ?? Colors.white24), width: 1),
+        border: Border.all(color: (color ?? AppTheme.divider), width: 1),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color ?? Colors.white70,
+          color: color ?? AppTheme.textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -686,10 +687,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: const BoxDecoration(
-        color: Color(0xFF121212),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
         border: Border(
-          bottom: BorderSide(color: Colors.white12),
+          bottom: BorderSide(color: AppTheme.divider),
         ),
       ),
       child: Row(
@@ -727,25 +728,25 @@ class _DashboardScreenState extends State<DashboardScreen>
           const Spacer(),
           Text(
             '${_two(_now.day)}/${_two(_now.month)}/${_now.year}',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
           const SizedBox(width: 16),
           Text(
             '${_two(_now.hour)}:${_two(_now.minute)}:${_two(_now.second)}',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
           const SizedBox(width: 8),
           IconButton(
             icon: Icon(
               _isMuted ? Icons.volume_off : Icons.volume_up,
-              color: Colors.white70,
+              color: AppTheme.textSecondary,
             ),
             tooltip: _isMuted ? 'Unmute alarm' : 'Mute alarm',
             onPressed: _toggleMute,
           ),
           if (AppSettings.password.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.lock_outline, color: Colors.white70),
+              icon: Icon(Icons.lock_outline, color: AppTheme.textSecondary),
               tooltip: 'Lock dashboard',
               onPressed: () => setState(() => _locked = true),
             ),
@@ -762,21 +763,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (_store.history.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          right: BorderSide(color: Colors.white12),
-          bottom: BorderSide(color: Colors.white12),
+          right: BorderSide(color: AppTheme.divider),
+          bottom: BorderSide(color: AppTheme.divider),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 12, 12, 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Text(
               'Floor',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
@@ -796,7 +797,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? Colors.white.withOpacity(0.08)
+                      ? AppTheme.textPrimary.withOpacity(0.08)
                       : Colors.transparent,
                   border: Border(
                     left: BorderSide(
@@ -811,7 +812,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 child: Text(
                   floor.floorLabel,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white54,
+                    color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
                     fontWeight:
                         isSelected ? FontWeight.bold : FontWeight.normal,
                     fontSize: 13,
@@ -839,18 +840,18 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return Container(
       width: 205,
-      color: const Color(0xFF161616),
+      color: AppTheme.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildFloorTabBar(),
-          const Divider(color: Colors.white12, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Text(
               '${floor.floorLabel} device',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
               ),
@@ -858,11 +859,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           Expanded(
             child: floor.sensors.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
                     child: Text(
                       'No sensors placed on this floor yet',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                     ),
                   )
                 : ListView.builder(
@@ -875,7 +876,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       return ListTile(
                         dense: true,
                         selected: isSelected,
-                        selectedTileColor: Colors.white.withOpacity(0.06),
+                        selectedTileColor: AppTheme.textPrimary.withOpacity(0.06),
                         leading: Icon(
                           _iconFor(sensor, status),
                           color: _colorFor(status),
@@ -884,8 +885,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         title: Text(
                           sensor.name,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -903,12 +904,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                     },
                   ),
           ),
-          const Divider(color: Colors.white12, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
               'Devices: $devicesOnline/$devicesTotal online',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
             ),
           ),
         ],
@@ -923,16 +924,16 @@ class _DashboardScreenState extends State<DashboardScreen>
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: Alignment.centerLeft,
-      decoration: const BoxDecoration(
-        color: Color(0xFF121212),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
         border: Border(
-          bottom: BorderSide(color: Colors.white12),
+          bottom: BorderSide(color: AppTheme.divider),
         ),
       ),
       child: Text(
         floor == null ? 'Floor image' : '${floor.floorLabel}',
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppTheme.textPrimary,
           fontSize: 13,
           fontWeight: FontWeight.bold,
         ),
@@ -954,16 +955,16 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return Container(
       width: 160,
-      color: const Color(0xFF161616),
+      color: AppTheme.panel,
       padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Status',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
@@ -989,9 +990,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(height: 6),
             if (offlineIds.isEmpty)
-              const Text(
+              Text(
                 'None',
-                style: TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               )
             else
               ...offlineIds.map(
@@ -999,27 +1000,27 @@ class _DashboardScreenState extends State<DashboardScreen>
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Text(
                     'Device $id',
-                    style: const TextStyle(
-                      color: Colors.white60,
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
                       fontSize: 11,
                     ),
                   ),
                 ),
               ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'Floors affected',
               style: TextStyle(
-                color: Colors.white70,
+                color: AppTheme.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 6),
             if (floorsWithOfflineDevices.isEmpty)
-              const Text(
+              Text(
                 'None',
-                style: TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               )
             else
               ...floorsWithOfflineDevices.map(
@@ -1027,8 +1028,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Text(
                     floor.floorLabel,
-                    style: const TextStyle(
-                      color: Colors.white60,
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
                       fontSize: 11,
                     ),
                   ),
@@ -1046,12 +1047,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
         ),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: AppTheme.textPrimary,
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
@@ -1074,10 +1075,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       height: 40,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF121212),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
         border: Border(
-          top: BorderSide(color: Colors.white12),
+          top: BorderSide(color: AppTheme.divider),
         ),
       ),
       child: Row(
@@ -1094,16 +1095,16 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
 
-          const VerticalDivider(
-            color: Colors.white12,
+          VerticalDivider(
+            color: AppTheme.divider,
             width: 1,
           ),
 
           Expanded(
             child: Text(
               'Total device: $devicesTotal',
-              style: const TextStyle(
-                color: Colors.white60,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
                 fontSize: 12,
               ),
             ),
@@ -1112,8 +1113,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           Expanded(
             child: Text(
               'Total sensor: $sensorsOnline/$sensorsTotal',
-              style: const TextStyle(
-                color: Colors.white60,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
                 fontSize: 12,
               ),
             ),
@@ -1241,7 +1242,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               builder: (context, constraints) {
                 return Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.textPrimary,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: ClipRRect(
@@ -1335,7 +1336,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       shape: BoxShape.circle,
                       color: color,
                       border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
+                          ? Border.all(color: AppTheme.textPrimary, width: 3)
                           : isFocused
                               ? Border.all(color: Colors.tealAccent, width: 2)
                               : null,
@@ -1356,7 +1357,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     child: Icon(
                       _iconFor(sensor, status),
-                      color: Colors.white,
+                      color: AppTheme.textPrimary,
                       size: iconSize,
                     ),
                   ),

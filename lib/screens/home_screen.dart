@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/rs485/rs485_service.dart';
+import '../utils/app_theme.dart';
 import '../utils/menu_item.dart';
 import '../widgets/tv_card.dart';
 import 'config/config_page.dart';
@@ -164,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.background,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -184,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'Real-Time Fire & Safety Monitoring System',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey,
+                    color: AppTheme.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 40),

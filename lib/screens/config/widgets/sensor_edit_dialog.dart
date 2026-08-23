@@ -349,7 +349,7 @@ class _TvSelectFieldState<T> extends State<_TvSelectField<T>> {
           child: Icon(
             icon,
             size: 20,
-            color: onTap == null ? Colors.grey.shade300 : Colors.black54,
+            color: onTap == null ? Colors.grey.shade700 : Colors.white70,
           ),
         ),
       ),
@@ -376,7 +376,7 @@ class _TvSelectFieldState<T> extends State<_TvSelectField<T>> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           border: Border.all(
-            color: _focused ? Colors.teal : Colors.grey.shade400,
+            color: _focused ? Colors.teal : Colors.white24,
             width: _focused ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -394,7 +394,7 @@ class _TvSelectFieldState<T> extends State<_TvSelectField<T>> {
                 children: [
                   Text(
                     widget.label,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                   Text(
                     currentLabel,
@@ -402,7 +402,7 @@ class _TvSelectFieldState<T> extends State<_TvSelectField<T>> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
-                      color: disabled ? Colors.grey : Colors.black87,
+                      color: disabled ? Colors.grey : Colors.white,
                     ),
                   ),
                 ],

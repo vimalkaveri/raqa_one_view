@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/config/site_image_config.dart';
+import '../../utils/app_theme.dart';
 
 /// Layout-only widget for the Fire Alert dashboard.
 ///
@@ -49,9 +50,9 @@ class FireAlertDashboardView extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerLeft,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF121212),
-                        border: Border(
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        border: const Border(
                           bottom: BorderSide(color: Colors.redAccent),
                         ),
                       ),
@@ -92,7 +93,7 @@ class _FireFloorList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 190,
-      color: const Color(0xFF161616),
+      color: AppTheme.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -146,7 +147,7 @@ class _FireFloorList extends StatelessWidget {
                             floor.floorLabel,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: selected ? Colors.white : Colors.white54,
+                              color: selected ? AppTheme.textPrimary : AppTheme.textSecondary,
                               fontWeight: selected
                                   ? FontWeight.bold
                                   : FontWeight.normal,

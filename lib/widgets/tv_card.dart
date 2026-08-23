@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_theme.dart';
+
 /// A focusable, remote-navigable card used in TV-style grid menus.
 ///
 /// Highlights (scale + glow) when either it has real input focus or it is
@@ -54,7 +56,7 @@ class _TvCardState extends State<TvCard> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               decoration: BoxDecoration(
-                color: hasFocus ? Colors.teal.shade700 : Colors.grey.shade900,
+                color: hasFocus ? Colors.teal.shade700 : AppTheme.card,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: hasFocus ? Colors.tealAccent : Colors.transparent,
@@ -73,12 +75,12 @@ class _TvCardState extends State<TvCard> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(widget.icon, size: 48, color: Colors.white),
+                  Icon(widget.icon, size: 48, color: hasFocus ? Colors.white : AppTheme.textPrimary),
                   const SizedBox(height: 12),
                   Text(
                     widget.label,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: hasFocus ? Colors.white : AppTheme.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),

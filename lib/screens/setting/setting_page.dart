@@ -25,6 +25,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/rs485/modbus_rtu.dart';
 import '../../services/settings/app_settings.dart';
+import '../../utils/app_theme.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -78,17 +79,33 @@ class _SettingScreenState extends State<SettingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          const _SectionHeader('Appearance'),
+          SwitchListTile(
+            secondary: Icon(Icons.dark_mode, color: Colors.tealAccent),
+            title: Text('Dark Mode', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text(
+              'Use a dark color scheme across the whole app',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+            value: AppSettings.darkModeEnabled,
+            onChanged: (value) async {
+              await AppSettings.setDarkModeEnabled(value);
+              if (mounted) setState(() {});
+            },
+          ),
+          Divider(color: AppTheme.divider, height: 1),
+
           const _SectionHeader('Alarm'),
           SwitchListTile(
             secondary: const Icon(Icons.campaign, color: Colors.orange),
-            title: const Text('Siren', style: TextStyle(color: Colors.white)),
-            subtitle: const Text(
+            title: Text('Siren', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text(
               'Turn the siren output on or off',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
             value: AppSettings.sirenEnabled,
             onChanged: (value) async {
@@ -96,15 +113,15 @@ class _SettingScreenState extends State<SettingScreen> {
               if (mounted) setState(() {});
             },
           ),
-          const Divider(color: Colors.white24, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
 
           const _SectionHeader('Devices'),
           SwitchListTile(
             secondary: const Icon(Icons.low_priority, color: Colors.tealAccent),
-            title: const Text('Priority', style: TextStyle(color: Colors.white)),
-            subtitle: const Text(
+            title: Text('Priority', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text(
               'Show the priority badge on the Devices screen',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
             value: AppSettings.priorityEnabled,
             onChanged: (value) async {
@@ -112,7 +129,7 @@ class _SettingScreenState extends State<SettingScreen> {
               if (mounted) setState(() {});
             },
           ),
-          const Divider(color: Colors.white24, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
 
           const _SectionHeader('Dashboard'),
           Focus(
@@ -139,20 +156,20 @@ class _SettingScreenState extends State<SettingScreen> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('Sensor pin size',
-                            style: TextStyle(color: Colors.white)),
-                        SizedBox(height: 2),
+                            style: TextStyle(color: AppTheme.textPrimary)),
+                        const SizedBox(height: 2),
                         Text(
                           'Use Left / Right to adjust',
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
                     icon:
-                        const Icon(Icons.chevron_left, color: Colors.white70),
+                        Icon(Icons.chevron_left, color: AppTheme.textPrimary),
                     onPressed: () => _adjustPinSize(-_pinSizeStep),
                   ),
                   SizedBox(
@@ -168,32 +185,32 @@ class _SettingScreenState extends State<SettingScreen> {
                   ),
                   IconButton(
                     icon:
-                        const Icon(Icons.chevron_right, color: Colors.white70),
+                        Icon(Icons.chevron_right, color: AppTheme.textPrimary),
                     onPressed: () => _adjustPinSize(_pinSizeStep),
                   ),
                 ],
               ),
             ),
           ),
-          const Divider(color: Colors.white24, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
 
           const _SectionHeader('System'),
           ListTile(
             leading: const Icon(Icons.backup, color: Colors.tealAccent),
-            title: const Text('Backup', style: TextStyle(color: Colors.white)),
-            subtitle: const Text(
+            title: Text('Backup', style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text(
               'Export the current device configuration',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
             onTap: _showBackupDialog,
           ),
           ListTile(
             leading: const Icon(Icons.lock_reset, color: Colors.orange),
-            title: const Text('Reset Password',
-                style: TextStyle(color: Colors.white)),
-            subtitle: const Text(
+            title: Text('Reset Password',
+                style: TextStyle(color: AppTheme.textPrimary)),
+            subtitle: Text(
               'Change the app-lock password',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
             onTap: _showPasswordDialog,
           ),

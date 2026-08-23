@@ -9,6 +9,7 @@ import '../../services/rs485/rs485_service.dart';
 import '../../services/scanning/device_scanning.dart';
 import '../../services/scanning/mini_register_preview.dart';
 import '../../services/settings/app_settings.dart';
+import '../../utils/app_theme.dart';
 class DeviceScreen extends StatefulWidget {
   final Rs485Service manager;
 
@@ -356,7 +357,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
         return KeyEventResult.handled;
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -371,14 +372,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
                   children: [
                     _topButton(
                       index: 0,
-                      child: const Icon(Icons.arrow_back, color: Colors.white),
+                      child: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const Spacer(),
-                    const Text(
+                    Text(
                       "Configuration",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppTheme.textPrimary,
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
                       ),
@@ -390,8 +391,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
                           index: 1,
                           child: Text(
                             isScanning ? "SCANNING..." : "SCAN",
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -466,12 +467,12 @@ class _DeviceScreenState extends State<DeviceScreen> {
                                 decoration: BoxDecoration(
                                   color: isEnabled
                                       ? Colors.green.withOpacity(0.15)
-                                      : Colors.white.withOpacity(0.04),
+                                      : AppTheme.textPrimary.withOpacity(0.04),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected
                                         ? Colors.orange
-                                        : Colors.white.withOpacity(0.15),
+                                        : AppTheme.textPrimary.withOpacity(0.15),
                                     width: isSelected ? 3 : 1,
                                   ),
                                 ),
@@ -483,8 +484,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
                                       "Slave $slaveId",
                                       style: TextStyle(
                                         color: isEnabled
-                                            ? Colors.white
-                                            : Colors.grey,
+                                            ? AppTheme.textPrimary
+                                            : AppTheme.textSecondary,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 8,
                                       ),
@@ -516,9 +517,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
                                             child: Text(
                                               slaveModels[slaveId]!,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.white70,
+                                                color: AppTheme.textSecondary,
                                               ),
                                             ),
                                           ),
@@ -559,7 +560,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                                 vertical: 1,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.black87,
+                                color: AppTheme.card,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(color: Colors.orange),
                               ),
@@ -603,7 +604,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? Colors.orange : Colors.grey[900],
+          color: selected ? Colors.orange : AppTheme.panel,
           borderRadius: BorderRadius.circular(8),
         ),
         child: child,
