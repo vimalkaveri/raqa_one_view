@@ -325,7 +325,10 @@ class _SettingScreenState extends State<SettingScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    FocusScope.of(context).unfocus();
+                    Navigator.pop(context);
+                  },
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -346,7 +349,10 @@ class _SettingScreenState extends State<SettingScreen> {
                     }
 
                     await AppSettings.setPassword(newController.text);
-                    if (context.mounted) Navigator.pop(context);
+                    if (context.mounted) {
+                      FocusScope.of(context).unfocus();
+                      Navigator.pop(context);
+                    }
                   },
                   child: const Text('Save'),
                 ),

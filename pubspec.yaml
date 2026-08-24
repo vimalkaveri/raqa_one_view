@@ -32,6 +32,7 @@ flutter:
 
   assets:
     - assets/images/app_icon.png
-    - assets/images/logo.png
+    - assets/images/black logo.png
+    - assets/images/white logo.png
     - assets/images/layout.svg
     - assets/sounds/fire_alarm.mp3

@@ -13,7 +13,7 @@
 //     — never the full 1-31 range) AND which zone on that device (a
 //     device can have more than one physical sensor input — see
 //     sensor_zones.dart) this pin represents, plus an editable
-//     name/location/notes.
+//     name/location.
 //   - Tap an existing pin to edit or remove it.
 // ==========================
 
@@ -31,6 +31,7 @@ import '../../services/config/placed_sensor.dart';
 import '../../services/config/sensor_type.dart';
 import '../../services/config/sensor_zones.dart';
 import '../../services/rs485/modbus_rtu.dart';
+import '../../services/settings/app_settings.dart';
 import '../../utils/app_theme.dart';
 import 'widgets/image_history_sheet.dart';
 import 'widgets/sensor_edit_dialog.dart';
@@ -63,15 +64,18 @@ class _ConfigScreenState extends State<ConfigScreen> {
       type: FocusNode(debugLabel: 'rail_${type.name}'),
   };
   final FocusNode _canvasFocusNode = FocusNode(debugLabel: 'canvas_crosshair');
+  final FocusNode _menuFocusNode = FocusNode(debugLabel: 'appbar_menu');
+  final GlobalKey<PopupMenuButtonState<String>> _menuKey = GlobalKey();
   final Map<String, FocusNode> _pinFocusNodes = {};
 
   SensorType? _focusedRailType;
   String? _focusedPinKey;
+  bool _menuFocused = false;
 
   SensorType? _armedSensorType;
   Offset _crosshairFraction = const Offset(0.5, 0.5);
 
-  static const double _crosshairStep = 0.02;
+  static const double _crosshairStep = 0.04;
 
   @override
   void initState() {
@@ -89,6 +93,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       node.dispose();
     }
     _canvasFocusNode.dispose();
+    _menuFocusNode.dispose();
     super.dispose();
   }
 
@@ -124,8 +129,37 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   ////////////////////////////////////////////////////////////
-  /// CROSSHAIR ARM / MOVE / DROP
+  /// REMOTE NAVIGATION HELPERS
+  ///
+  /// Flutter's default D-pad traversal estimates direction purely by
+  /// widget geometry, which is unreliable across a layout this varied
+  /// (AppBar menu top-right, rail far-left, canvas center with pins
+  /// scattered wherever the user placed them, hint panel far-right) —
+  /// it can land somewhere unexpected or seem to do nothing. These
+  /// helpers wire up explicit, predictable jumps between the regions
+  /// instead, same pattern as the crosshair placement flow above.
   ////////////////////////////////////////////////////////////
+
+  void _focusFirstRailIcon() {
+    _railFocusNodes[SensorType.values.first]?.requestFocus();
+  }
+
+  void _focusAdjacentRailIcon(SensorType current, int delta) {
+    final types = SensorType.values;
+    final index = types.indexOf(current);
+    final nextIndex = (index + delta) % types.length;
+    final wrapped = nextIndex < 0 ? nextIndex + types.length : nextIndex;
+    _railFocusNodes[types[wrapped]]?.requestFocus();
+  }
+
+  /// Right, from the rail: jump into the canvas to review/edit an
+  /// already-placed pin. Falls back to doing nothing if there are none
+  /// yet — placing a first sensor is the Select action, not Right.
+  void _focusCanvasFromRail() {
+    final sensors = _store.active?.sensors ?? const [];
+    if (sensors.isEmpty) return;
+    _pinFocusNodeFor(sensors.first).requestFocus();
+  }
 
   void _armSensorType(SensorType type) {
     if (_store.active == null) {
@@ -180,7 +214,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   KeyEventResult _handleCanvasKeyEvent(FocusNode node, KeyEvent event) {
     if (_armedSensorType == null) return KeyEventResult.ignored;
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    // Respond to both the initial press and the repeat events a held-down
+    // remote/keyboard key sends — previously only KeyDownEvent was
+    // handled, so holding a D-pad direction did nothing after the first
+    // step and every move needed a fresh press. KeyUpEvent is still
+    // ignored.
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
 
     final key = event.logicalKey;
 
@@ -204,13 +243,15 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.numpadEnter) {
-      _dropArmedSensor();
+      // Only place on the initial press — a held Select shouldn't drop
+      // repeatedly the way arrow-key repeats should keep moving.
+      if (event is KeyDownEvent) _dropArmedSensor();
       return KeyEventResult.handled;
     }
 
     if (key == LogicalKeyboardKey.escape ||
         key == LogicalKeyboardKey.goBack) {
-      _disarmCrosshair();
+      if (event is KeyDownEvent) _disarmCrosshair();
       return KeyEventResult.handled;
     }
 
@@ -332,28 +373,73 @@ class _ConfigScreenState extends State<ConfigScreen> {
       appBar: AppBar(
         title: const Text('Configuration'),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'load') _loadImage();
-              if (value == 'history') showImageHistorySheet(context);
+          // PopupMenuButton has no focusNode param, so we drive its focus
+          // and activation ourselves: this outer Focus is what actually
+          // receives D-pad focus/highlighting, Select/Enter opens the
+          // menu programmatically via _menuKey, and Down jumps to the
+          // rail — the same deterministic-navigation pattern used
+          // throughout this screen instead of relying on Flutter's
+          // default (unreliable, for this layout) geometric traversal.
+          Focus(
+            focusNode: _menuFocusNode,
+            onFocusChange: (focused) {
+              if (!mounted) return;
+              setState(() => _menuFocused = focused);
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'load',
-                child: ListTile(
-                  leading: Icon(Icons.add_photo_alternate_outlined),
-                  title: Text('Load Floor Plan (SVG)'),
+            onKeyEvent: (node, event) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              final key = event.logicalKey;
+              if (key == LogicalKeyboardKey.enter ||
+                  key == LogicalKeyboardKey.select ||
+                  key == LogicalKeyboardKey.numpadEnter) {
+                _menuKey.currentState?.showButtonMenu();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowDown) {
+                _focusFirstRailIcon();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: _menuFocused
+                    ? Border.all(color: Colors.teal, width: 2)
+                    : null,
+              ),
+              child: ExcludeFocus(
+                // PopupMenuButton builds its own internally-focusable
+                // IconButton; without excluding it, D-pad users would hit
+                // two separate focus stops here (ours, then its) instead
+                // of one. Mouse/touch taps are unaffected.
+                child: PopupMenuButton<String>(
+                  key: _menuKey,
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'load') _loadImage();
+                    if (value == 'history') showImageHistorySheet(context);
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'load',
+                      child: ListTile(
+                        leading: Icon(Icons.add_photo_alternate_outlined),
+                        title: Text('Load Floor Plan (SVG)'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'history',
+                      child: ListTile(
+                        leading: const Icon(Icons.history),
+                        title: Text('Image History (${_store.history.length})'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              PopupMenuItem(
-                value: 'history',
-                child: ListTile(
-                  leading: const Icon(Icons.history),
-                  title: Text('Image History (${_store.history.length})'),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -406,9 +492,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
     final isArmed = _armedSensorType == type;
     final isFocused = _focusedRailType == type;
+    // Autofocus the first rail icon so a remote can start driving the
+    // D-pad the instant this screen appears — but only once there's an
+    // image loaded to place sensors on; otherwise the empty state's
+    // "Load Floor Plan" button claims autofocus instead (see
+    // _buildEmptyState), since that's the actual first required step.
+    final isFirst = type == SensorType.values.first;
 
     return Focus(
       focusNode: _railFocusNodes[type]!,
+      autofocus: isFirst && _store.active != null,
       onFocusChange: (focused) {
         if (!mounted) return;
         setState(() => _focusedRailType = focused ? type : null);
@@ -420,6 +513,22 @@ class _ConfigScreenState extends State<ConfigScreen> {
             key == LogicalKeyboardKey.select ||
             key == LogicalKeyboardKey.numpadEnter) {
           _armSensorType(type);
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.arrowUp) {
+          if (isFirst) {
+            _menuFocusNode.requestFocus();
+          } else {
+            _focusAdjacentRailIcon(type, -1);
+          }
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.arrowDown) {
+          _focusAdjacentRailIcon(type, 1);
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.arrowRight) {
+          _focusCanvasFromRail();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -473,6 +582,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _loadImage,
+            autofocus: true,
             icon: const Icon(Icons.add_photo_alternate_outlined),
             label: const Text('Load Floor Plan'),
           ),
@@ -600,7 +710,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Widget _buildPin(PlacedSensor sensor, Size canvasSize) {
-    const pinSize = 44.0;
+    final pinSize = AppSettings.pinSize;
 
     Widget pinCircle({double opacity = 1, bool focused = false}) {
       return Opacity(
@@ -613,7 +723,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
           child: CircleAvatar(
             radius: pinSize / 2,
             backgroundColor: Colors.white.withOpacity(0.85),
-            child: Icon(sensor.type.icon, color: sensor.type.color, size: 22),
+            child: Icon(sensor.type.icon, color: sensor.type.color, size: pinSize * 0.5),
           ),
         ),
       );
@@ -644,6 +754,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
               key == LogicalKeyboardKey.select ||
               key == LogicalKeyboardKey.numpadEnter) {
             _onPinTapped(sensor);
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowLeft) {
+            // Deterministic escape hatch back to the rail — the default
+            // geometric traversal from a pin's on-canvas position isn't
+            // reliable, especially for pins placed near the canvas edges.
+            _focusFirstRailIcon();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;

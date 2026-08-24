@@ -6,9 +6,9 @@
 //     dropped onto the image. The user picks which scanned slave AND
 //     which zone on that slave (a slave can have more than one physical
 //     sensor zone — see sensor_zones.dart) this pin represents, then can
-//     set name/location/notes.
+//     set name/location.
 //   - showEditSensorDialog: used when tapping an already-placed pin.
-//     The slave/zone/type are fixed; name/location/notes stay editable,
+//     The slave/zone/type are fixed; name/location stay editable,
 //     plus a Remove option.
 // ==========================
 
@@ -46,7 +46,7 @@ Future<PlacedSensor?> showAssignSensorDialog(
 
   final nameController = TextEditingController(text: defaultName());
   final locationController = TextEditingController();
-  final notesController = TextEditingController();
+  final locationFocusNode = FocusNode(debugLabel: 'sensor_location_field');
 
   return showDialog<PlacedSensor>(
     context: context,
@@ -108,28 +108,31 @@ Future<PlacedSensor?> showAssignSensorDialog(
                           },
                         ),
                         const SizedBox(height: 12),
-                        TextField(
+                        _TvTextField(
+                          label: 'Name',
                           controller: nameController,
-                          decoration: const InputDecoration(labelText: 'Name'),
+                          textInputAction: TextInputAction.next,
+                          nextFocusNode: locationFocusNode,
                         ),
                         const SizedBox(height: 12),
-                        TextField(
+                        _TvTextField(
+                          label: 'Location',
                           controller: locationController,
-                          decoration:
-                              const InputDecoration(labelText: 'Location'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: notesController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(labelText: 'Notes'),
+                          focusNode: locationFocusNode,
+                          textInputAction: TextInputAction.done,
                         ),
                       ],
                     ),
                   ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  // Unfocus before popping — closing a dialog while one of
+                  // its TextFields still holds focus (Name is autofocused)
+                  // can crash with a BuildScope assertion mid-frame.
+                  FocusScope.of(context).unfocus();
+                  Navigator.pop(context);
+                },
                 child: const Text('Cancel'),
               ),
               if (availableSlaveIds.isNotEmpty)
@@ -143,6 +146,7 @@ Future<PlacedSensor?> showAssignSensorDialog(
                   onPressed: (selectedSlaveId == null || selectedZone == null)
                       ? null
                       : () {
+                          FocusScope.of(context).unfocus();
                           Navigator.pop(
                             context,
                             PlacedSensor(
@@ -154,7 +158,6 @@ Future<PlacedSensor?> showAssignSensorDialog(
                                   ? defaultName()
                                   : nameController.text.trim(),
                               location: locationController.text.trim(),
-                              notes: notesController.text.trim(),
                               xFraction: xFraction,
                               yFraction: yFraction,
                             ),
@@ -167,7 +170,15 @@ Future<PlacedSensor?> showAssignSensorDialog(
         },
       );
     },
-  );
+  ).whenComplete(() {
+    // Deferred a frame — disposing a FocusNode still tangled up in the
+    // dialog's own closing/pop transition can trigger the same
+    // mid-frame BuildScope crash the unfocus() calls above guard
+    // against elsewhere in this dialog.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      locationFocusNode.dispose();
+    });
+  });
 }
 
 ////////////////////////////////////////////////////////////
@@ -181,7 +192,7 @@ Future<PlacedSensor?> showEditSensorDialog(
 }) {
   final nameController = TextEditingController(text: sensor.name);
   final locationController = TextEditingController(text: sensor.location);
-  final notesController = TextEditingController(text: sensor.notes);
+  final locationFocusNode = FocusNode(debugLabel: 'sensor_location_field');
 
   return showDialog<PlacedSensor>(
     context: context,
@@ -204,21 +215,19 @@ Future<PlacedSensor?> showEditSensorDialog(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              _TvTextField(
+                label: 'Name',
                 controller: nameController,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Name'),
+                textInputAction: TextInputAction.next,
+                nextFocusNode: locationFocusNode,
               ),
               const SizedBox(height: 12),
-              TextField(
+              _TvTextField(
+                label: 'Location',
                 controller: locationController,
-                decoration: const InputDecoration(labelText: 'Location'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Notes'),
+                focusNode: locationFocusNode,
+                textInputAction: TextInputAction.done,
               ),
             ],
           ),
@@ -227,13 +236,17 @@ Future<PlacedSensor?> showEditSensorDialog(
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
             onPressed: () {
+              FocusScope.of(context).unfocus();
               onRemove();
               Navigator.pop(context);
             },
             child: const Text('Remove'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              Navigator.pop(context);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -247,8 +260,8 @@ Future<PlacedSensor?> showEditSensorDialog(
                     ? sensor.name
                     : nameController.text.trim(),
                 location: locationController.text.trim(),
-                notes: notesController.text.trim(),
               );
+              FocusScope.of(context).unfocus();
               Navigator.pop(context, updated);
             },
             child: const Text('Save'),
@@ -256,7 +269,214 @@ Future<PlacedSensor?> showEditSensorDialog(
         ],
       );
     },
-  );
+  ).whenComplete(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      locationFocusNode.dispose();
+    });
+  });
+}
+
+////////////////////////////////////////////////////////////
+/// TV-REMOTE-FRIENDLY TEXT FIELD
+///
+/// A plain TextField opens the on-screen keyboard the instant it gains
+/// focus — including just from D-pad navigation landing on it, which
+/// is unwanted here: the field should only start with a real keyboard
+/// once the user explicitly selects it (Select/Enter on a remote, or a
+/// tap/click). Until then it's just a highlighted, non-editing display
+/// box.
+///
+/// This decouples the two: an outer Focus node is what D-pad navigation
+/// actually lands on (shows the teal highlight, nothing else); Select
+/// or a tap swaps in a real TextField and focuses *that*, which is what
+/// triggers the keyboard. Finishing (Done/Next on the keyboard, tapping
+/// elsewhere, or Back/Escape) swaps back to the display box.
+////////////////////////////////////////////////////////////
+
+class _TvTextField extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final TextInputAction textInputAction;
+  final FocusNode? focusNode;
+  final FocusNode? nextFocusNode;
+  final bool autofocus;
+
+  const _TvTextField({
+    required this.label,
+    required this.controller,
+    this.textInputAction = TextInputAction.done,
+    this.focusNode,
+    this.nextFocusNode,
+    this.autofocus = false,
+  });
+
+  @override
+  State<_TvTextField> createState() => _TvTextFieldState();
+}
+
+class _TvTextFieldState extends State<_TvTextField> {
+  late final FocusNode _outerFocusNode = widget.focusNode ?? FocusNode();
+  final FocusNode _innerFocusNode = FocusNode();
+  bool _editing = false;
+  bool _focused = false;
+
+  @override
+  void dispose() {
+    // Only dispose the outer node if we created it ourselves — when the
+    // caller supplies one (for cross-field D-pad chaining), it owns it.
+    if (widget.focusNode == null) _outerFocusNode.dispose();
+    _innerFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _startEditing() {
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _innerFocusNode.requestFocus();
+    });
+  }
+
+  void _stopEditing({bool advanceToNext = false}) {
+    if (!_editing) return;
+    setState(() => _editing = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Advancing (Done/Next pressed on the keyboard) only moves the
+      // D-pad highlight to the next field — it deliberately does NOT
+      // open that field's keyboard too; that still needs its own
+      // explicit Select/tap.
+      if (advanceToNext && widget.nextFocusNode != null) {
+        widget.nextFocusNode!.requestFocus();
+      } else {
+        _outerFocusNode.requestFocus();
+      }
+    });
+  }
+
+  KeyEventResult _onOuterKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _startEditing();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = widget.controller.text.trim().isEmpty;
+
+    return Focus(
+      focusNode: _outerFocusNode,
+      autofocus: widget.autofocus,
+      onFocusChange: (focused) {
+        if (!mounted) return;
+        setState(() => _focused = focused);
+      },
+      // While editing, the real TextField below owns keyboard focus and
+      // handles its own keys — this outer handler steps aside so it
+      // doesn't compete for Enter/Select.
+      onKeyEvent: _editing ? null : _onOuterKeyEvent,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _editing ? null : _startEditing,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity((_focused || _editing) ? 0.08 : 0.04),
+            border: Border.all(
+              color: (_focused || _editing) ? Colors.teal : Colors.white24,
+              width: (_focused || _editing) ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _editing
+                    ? Focus(
+                        // Not a separate focus stop — just intercepts
+                        // Back/Escape bubbling up from the real TextField
+                        // so a remote's Back button can bail out of
+                        // editing without submitting.
+                        canRequestFocus: false,
+                        onKeyEvent: (node, event) {
+                          if (event is KeyDownEvent &&
+                              (event.logicalKey == LogicalKeyboardKey.escape ||
+                                  event.logicalKey ==
+                                      LogicalKeyboardKey.goBack)) {
+                            _stopEditing();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: TextField(
+                          controller: widget.controller,
+                          focusNode: _innerFocusNode,
+                          autofocus: true,
+                          textInputAction: widget.textInputAction,
+                          cursorColor: Colors.tealAccent,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: widget.label,
+                            labelStyle: const TextStyle(
+                              color: Colors.tealAccent,
+                              fontSize: 11,
+                            ),
+                            isDense: true,
+                            isCollapsed: false,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onSubmitted: (_) =>
+                              _stopEditing(advanceToNext: true),
+                          onTapOutside: (_) => _stopEditing(),
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.label,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isEmpty ? 'Tap to enter' : widget.controller.text,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle:
+                                  isEmpty ? FontStyle.italic : FontStyle.normal,
+                              color: isEmpty ? Colors.grey : Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                _editing ? Icons.check_circle_outline : Icons.edit_outlined,
+                size: 18,
+                color: (_focused || _editing) ? Colors.tealAccent : Colors.white38,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 ////////////////////////////////////////////////////////////
