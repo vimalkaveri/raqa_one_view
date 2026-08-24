@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../services/rs485/rs485_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/menu_item.dart';
+import '../widgets/app_lock_gate.dart';
 import '../widgets/tv_card.dart';
 import 'config/config_page.dart';
 import 'dashboard/dashboard_page.dart';
@@ -48,12 +49,13 @@ class _HomeScreenState extends State<HomeScreen> {
     MenuItem(
       icon: Icons.devices_other,
       label: 'Devices',
-      screenBuilder: (context) => DeviceScreen(manager: widget.manager),
+      screenBuilder: (context) =>
+          AppLockGate(child: DeviceScreen(manager: widget.manager)),
     ),
     MenuItem(
       icon: Icons.settings_input_component,
       label: 'Configuration',
-      screenBuilder: (context) => ConfigScreen(),
+      screenBuilder: (context) => AppLockGate(child: ConfigScreen()),
     ),
     MenuItem(
       icon: Icons.settings,

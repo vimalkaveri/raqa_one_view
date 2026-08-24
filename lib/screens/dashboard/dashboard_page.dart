@@ -132,12 +132,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   DateTime _now = DateTime.now();
 
-  // ---------------- LOCK ----------------
-
-  late bool _locked = AppSettings.password.isNotEmpty;
-  final TextEditingController _pinController = TextEditingController();
-  String? _pinError;
-
   // ---------------- BUZZER ----------------
 
   static const String _buzzerAsset = 'sounds/fire_alarm.mp3';
@@ -206,7 +200,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _tickTimer?.cancel();
     _rippleController.dispose();
     _buzzerPlayer.dispose();
-    _pinController.dispose();
     _floorTabScrollController.dispose();
     for (final node in _pinFocusNodes.values) {
       node.dispose();
@@ -416,59 +409,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   ////////////////////////////////////////////////////////////
-  /// LOCK SCREEN
-  ////////////////////////////////////////////////////////////
-
-  void _attemptUnlock() {
-    if (_pinController.text == AppSettings.password) {
-      setState(() {
-        _locked = false;
-        _pinError = null;
-        _pinController.clear();
-      });
-    } else {
-      setState(() => _pinError = 'Incorrect password');
-    }
-  }
-
-  Widget _buildLockScreen() {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock, size: 56, color: Colors.tealAccent),
-            const SizedBox(height: 16),
-            Text(
-              'Dashboard Locked',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 20),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _pinController,
-              obscureText: true,
-              autofocus: true,
-              style: TextStyle(color: AppTheme.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                errorText: _pinError,
-                border: const OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => _attemptUnlock(),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _attemptUnlock,
-              child: const Text('Unlock'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  ////////////////////////////////////////////////////////////
   /// UI
   ////////////////////////////////////////////////////////////
 
@@ -479,19 +419,17 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: _locked
-            ? _buildLockScreen()
-            : fireAlert
-                ? _buildFireAlertDashboard()
-                : NormalDashboardView(
-                    topStatusBar: _buildTopStatusBar(),
-                    leftPanel: _buildLeftPanel(),
-                    floorBody: _buildFloorBody(),
-                    rightPanel: _buildRightPanel(),
-                    bottomSummary: _buildBottomSummary(),
-                    emptyState: _buildEmptyState(),
-                    hasFloors: _store.history.isNotEmpty,
-                  ),
+        child: fireAlert
+            ? _buildFireAlertDashboard()
+            : NormalDashboardView(
+                topStatusBar: _buildTopStatusBar(),
+                leftPanel: _buildLeftPanel(),
+                floorBody: _buildFloorBody(),
+                rightPanel: _buildRightPanel(),
+                bottomSummary: _buildBottomSummary(),
+                emptyState: _buildEmptyState(),
+                hasFloors: _store.history.isNotEmpty,
+              ),
       ),
     );
   }
@@ -744,12 +682,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             tooltip: _isMuted ? 'Unmute alarm' : 'Mute alarm',
             onPressed: _toggleMute,
           ),
-          if (AppSettings.password.isNotEmpty)
-            IconButton(
-              icon: Icon(Icons.lock_outline, color: AppTheme.textSecondary),
-              tooltip: 'Lock dashboard',
-              onPressed: () => setState(() => _locked = true),
-            ),
         ],
       ),
     );

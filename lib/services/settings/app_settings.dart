@@ -25,7 +25,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppSettings {
   static bool sirenEnabled = false;
   static bool priorityEnabled = true;
-  static String password = '';
+  /// App-lock password. Ships with a default of '0000' so the lock (see
+  /// AppLockGate, used on the Device Scan and Configuration screens) is
+  /// active out of the box; change or clear it from Settings > Reset
+  /// Password. An empty password disables the lock entirely.
+  static String password = '0000';
 
   /// Whether the app is using the dark theme. Defaults to true, matching
   /// this app's original (and only, until now) look.
