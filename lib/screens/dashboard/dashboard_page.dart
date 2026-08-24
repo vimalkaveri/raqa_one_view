@@ -382,7 +382,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   ////////////////////////////////////////////////////////////
 
   Future<void> _updateBuzzer() async {
-    final shouldBuzz = _anyFireAnywhere && !_isMuted;
+    final shouldBuzz =
+        _anyFireAnywhere && !_isMuted && AppSettings.sirenEnabled;
 
     if (shouldBuzz && !_isBuzzing) {
       _isBuzzing = true;
@@ -674,14 +675,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
           const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(
-              _isMuted ? Icons.volume_off : Icons.volume_up,
-              color: AppTheme.textSecondary,
+          if (AppSettings.sirenEnabled)
+            IconButton(
+              icon: Icon(
+                _isMuted ? Icons.volume_off : Icons.volume_up,
+                color: AppTheme.textSecondary,
+              ),
+              tooltip: _isMuted ? 'Unmute alarm' : 'Mute alarm',
+              onPressed: _toggleMute,
             ),
-            tooltip: _isMuted ? 'Unmute alarm' : 'Mute alarm',
-            onPressed: _toggleMute,
-          ),
         ],
       ),
     );
