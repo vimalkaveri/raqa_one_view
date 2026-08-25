@@ -48,75 +48,87 @@ class DeviceScanning {
 
     print("========== STARTING RS485 SCAN ==========");
 
-    final totalSlaves = endSlaveId - startSlaveId + 1;
-    int progressIndex = 0;
+    // Pause background polling for the *entire* scan, not per-slave --
+    // otherwise, as soon as one slave matches and gets added to
+    // ModbusRtu.slaveIds, the poll timer resumes mid-scan and races the
+    // scan's own requests for the port, corrupting or starving most of
+    // the remaining slaves' responses.
+    await manager.beginManualScan();
 
-    for (int slaveId = startSlaveId; slaveId <= endSlaveId; slaveId++) {
-      progressIndex++;
+    try {
+      final totalSlaves = endSlaveId - startSlaveId + 1;
+      int progressIndex = 0;
 
-      onProgress?.call(progressIndex, totalSlaves);
+      for (int slaveId = startSlaveId; slaveId <= endSlaveId; slaveId++) {
+        progressIndex++;
 
-      bool slaveFound = false;
+        onProgress?.call(progressIndex, totalSlaves);
 
-      for (int attempt = 1; attempt <= retries + 1; attempt++) {
-        try {
-          print("Scanning Slave $slaveId (Attempt $attempt)");
+        bool slaveFound = false;
 
-          final values = await manager.readRegistersForScan(
-            slaveId: slaveId,
-            startAddress: startAddress,
-            quantity: quantity,
-            attempts: 1,
-            timeout: responseTimeout,
-          );
+        for (int attempt = 1; attempt <= retries + 1; attempt++) {
+          try {
+            print("Scanning Slave $slaveId (Attempt $attempt)");
 
-          if (values == null || values.length < 3) {
-            print("Invalid response from Slave $slaveId");
-            await Future.delayed(retryDelay);
-            continue;
-          }
+            final values = await manager.readRegistersForScan(
+              slaveId: slaveId,
+              startAddress: startAddress,
+              quantity: quantity,
+              attempts: 1,
+              timeout: responseTimeout,
+            );
 
-          final int r1 = values[1];
-          final int r2 = values[2];
+            if (values == null || values.length < 3) {
+              print("Invalid response from Slave $slaveId");
+              await Future.delayed(retryDelay);
+              continue;
+            }
 
-          print(
-            "Slave $slaveId Signature -> "
-                "r1=0x${r1.toRadixString(16).padLeft(4, '0')} "
-                "r2=0x${r2.toRadixString(16).padLeft(4, '0')}",
-          );
+            final int r1 = values[1];
+            final int r2 = values[2];
 
-          final DeviceSignature? matchedDevice = _matchDevice(r1, r2);
+            print(
+              "Slave $slaveId Signature -> "
+                  "r1=0x${r1.toRadixString(16).padLeft(4, '0')} "
+                  "r2=0x${r2.toRadixString(16).padLeft(4, '0')}",
+            );
 
-          if (matchedDevice == null) {
-            print("Unknown device at Slave $slaveId");
+            final DeviceSignature? matchedDevice = _matchDevice(r1, r2);
+
+            if (matchedDevice == null) {
+              print("Unknown device at Slave $slaveId");
+              break;
+            }
+
+            print(
+              "Matched Device at Slave $slaveId -> ${matchedDevice.modelName}",
+            );
+
+            ModbusRtu.registerSlaveDevice(
+              slaveId: slaveId,
+              signature: matchedDevice,
+            );
+
+            detectedDevices[slaveId] = matchedDevice;
+
+            slaveFound = true;
             break;
+          } catch (e) {
+            print("Scan error Slave $slaveId: $e");
+            await Future.delayed(retryDelay);
           }
+        }
 
-          print(
-            "Matched Device at Slave $slaveId -> ${matchedDevice.modelName}",
-          );
-
-          ModbusRtu.registerSlaveDevice(
-            slaveId: slaveId,
-            signature: matchedDevice,
-          );
-
-          detectedDevices[slaveId] = matchedDevice;
-
-          slaveFound = true;
-          break;
-        } catch (e) {
-          print("Scan error Slave $slaveId: $e");
-          await Future.delayed(retryDelay);
+        if (!slaveFound) {
+          print("Slave $slaveId not detected");
         }
       }
 
-      if (!slaveFound) {
-        print("Slave $slaveId not detected");
-      }
+      await ModbusRtu.saveSettings();
+    } finally {
+      // Always resume polling, even if the scan throws partway through.
+      manager.endManualScan();
     }
-
-    await ModbusRtu.saveSettings();
 
     print("========== SCAN COMPLETE ==========");
     print("Total Devices Found: ${detectedDevices.length}");

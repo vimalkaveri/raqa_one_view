@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/dashboard/dashboard_page.dart';
@@ -8,6 +9,24 @@ import 'services/settings/app_settings.dart';
 
 void main() {
   runApp(const RaqaOneViewApp());
+}
+
+/// Default [ScrollBehavior] only allows drag-to-scroll from touch/stylus/
+/// trackpad. On Android (and other non-desktop targets) that silently
+/// excludes a physical mouse, so any horizontal list — e.g. the fire-alert
+/// device cards at the bottom of the dashboard — can be driven by the
+/// remote (which scrolls programmatically via focus changes) but not by a
+/// connected mouse. Adding [PointerDeviceKind.mouse] here fixes that for
+/// every scrollable in the app.
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class RaqaOneViewApp extends StatefulWidget {
@@ -54,6 +73,7 @@ class _RaqaOneViewAppState extends State<RaqaOneViewApp> {
         return MaterialApp(
           title: 'Raqa One View',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: AppScrollBehavior(),
 
           theme: ThemeData(
             brightness: Brightness.light,

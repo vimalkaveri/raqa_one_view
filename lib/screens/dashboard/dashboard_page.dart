@@ -108,6 +108,10 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   final List<FocusNode> _deviceFocusNodes = [];
 
+  final List<FocusNode> _alertFloorFocusNodes = [];
+
+  int _focusedAlertFloorIndex = 0;
+
   final FocusNode _floorHeaderFocusNode =
   FocusNode(debugLabel: 'floor_header');
 
@@ -119,6 +123,18 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Device list scrolling
   final ScrollController _deviceScrollController =
+  ScrollController();
+
+  // ==========================================================
+  // FIRE ALERT DEVICE CARDS (remote left/right navigation)
+  // ==========================================================
+
+  final List<FocusNode> _alertCardFocusNodes = [];
+
+  int _focusedAlertCardIndex = 0;
+
+  final ScrollController
+  _alertCardScrollController =
   ScrollController();
 
   // ==========================================================
@@ -195,6 +211,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupFocusNodes();
+      _setupAlertFloorFocusNodes();
 
       if (_store.history.isNotEmpty) {
         _requestFloorFocus(0);
@@ -239,6 +256,179 @@ class _DashboardScreenState extends State<DashboardScreen>
     while (_deviceFocusNodes.length > deviceCount) {
       _deviceFocusNodes.removeLast().dispose();
     }
+  }
+
+  void _setupAlertFloorFocusNodes() {
+    final floorCount = _fireFloors.length;
+
+    while (_alertFloorFocusNodes.length < floorCount) {
+      final index = _alertFloorFocusNodes.length;
+      _alertFloorFocusNodes.add(
+        FocusNode(debugLabel: 'alert_floor_$index'),
+      );
+    }
+
+    while (_alertFloorFocusNodes.length > floorCount) {
+      _alertFloorFocusNodes.removeLast().dispose();
+    }
+
+    if (floorCount == 0) {
+      _focusedAlertFloorIndex = 0;
+    } else if (_focusedAlertFloorIndex >= floorCount) {
+      _focusedAlertFloorIndex = floorCount - 1;
+    }
+  }
+
+  void _requestAlertFloorFocus(int index) {
+    _setupAlertFloorFocusNodes();
+    if (_alertFloorFocusNodes.isEmpty) return;
+
+    final safeIndex = index.clamp(0, _alertFloorFocusNodes.length - 1);
+    _focusedAlertFloorIndex = safeIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || safeIndex >= _alertFloorFocusNodes.length) return;
+      _alertFloorFocusNodes[safeIndex].requestFocus();
+    });
+  }
+
+  void _onAlertFloorFocused(int index) {
+    if (!mounted || index < 0 || index >= _fireFloors.length) return;
+    setState(() {
+      _focusedAlertFloorIndex = index;
+    });
+  }
+
+  void _moveAlertFloorFocus(int index) {
+    if (index < 0 || index >= _fireFloors.length) return;
+    _requestAlertFloorFocus(index);
+  }
+
+  void _selectAlertFloor(int index) {
+    if (index < 0 || index >= _fireFloors.length) return;
+
+    setState(() {
+      _selectedAlertFloorIndex = index;
+      _focusedAlertFloorIndex = index;
+      _selectedSensor = null;
+    });
+
+    _requestAlertFloorFocus(index);
+  }
+
+  void _setupAlertCardFocusNodes(
+      int cardCount,
+      ) {
+    while (_alertCardFocusNodes.length <
+        cardCount) {
+      final index =
+          _alertCardFocusNodes.length;
+
+      _alertCardFocusNodes.add(
+        FocusNode(
+          debugLabel:
+          'alert_card_$index',
+        ),
+      );
+    }
+
+    while (_alertCardFocusNodes.length >
+        cardCount) {
+      _alertCardFocusNodes
+          .removeLast()
+          .dispose();
+    }
+
+    if (_focusedAlertCardIndex >=
+        cardCount) {
+      _focusedAlertCardIndex =
+          cardCount > 0
+              ? cardCount - 1
+              : 0;
+    }
+  }
+
+  void _requestAlertCardFocus(
+      int index,
+      ) {
+    if (_alertCardFocusNodes
+        .isEmpty) {
+      return;
+    }
+
+    final safeIndex = index.clamp(
+      0,
+      _alertCardFocusNodes.length - 1,
+    );
+
+    _focusedAlertCardIndex =
+        safeIndex;
+
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _alertCardFocusNodes[safeIndex]
+          .requestFocus();
+
+      _scrollAlertCardIntoView(
+        safeIndex,
+      );
+    });
+  }
+
+  void _scrollAlertCardIntoView(
+      int index,
+      ) {
+    if (!_alertCardScrollController
+        .hasClients) {
+      return;
+    }
+
+    // Card width (420) + separator (10).
+    const cardExtent = 430.0;
+
+    final target =
+        index * cardExtent;
+
+    final viewport =
+        _alertCardScrollController
+            .position
+            .viewportDimension;
+
+    final current =
+        _alertCardScrollController
+            .offset;
+
+    double? destination;
+
+    if (target < current) {
+      destination = target;
+    } else if (target + cardExtent >
+        current + viewport) {
+      destination =
+          target +
+              cardExtent -
+              viewport;
+    }
+
+    if (destination == null) return;
+
+    destination = destination.clamp(
+      0.0,
+      _alertCardScrollController
+          .position
+          .maxScrollExtent,
+    );
+
+    _alertCardScrollController
+        .animateTo(
+      destination,
+      duration: const Duration(
+        milliseconds: 220,
+      ),
+      curve: Curves.easeOut,
+    );
   }
 
   void _requestFloorFocus(int index) {
@@ -353,13 +543,23 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     _deviceScrollController.dispose();
 
+    _alertCardScrollController.dispose();
+
     _floorHeaderFocusNode.dispose();
 
     for (final node in _floorFocusNodes) {
       node.dispose();
     }
 
+    for (final node in _alertFloorFocusNodes) {
+      node.dispose();
+    }
+
     for (final node in _deviceFocusNodes) {
+      node.dispose();
+    }
+
+    for (final node in _alertCardFocusNodes) {
       node.dispose();
     }
 
@@ -413,17 +613,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           : _store.history.length - 1;
     }
 
-    if (_selectedAlertFloorIndex >=
-        _store.history.length) {
+    if (_selectedAlertFloorIndex >= _fireFloors.length) {
       _selectedAlertFloorIndex =
-      _store.history.isEmpty
-          ? 0
-          : _store.history.length - 1;
+      _fireFloors.isEmpty ? 0 : _fireFloors.length - 1;
     }
 
     _prunePinFocusNodes();
 
     _setupFocusNodes();
+    _setupAlertFloorFocusNodes();
 
     setState(() {});
   }
@@ -741,6 +939,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  bool _wasFireAlertActive = false;
+
   // ==========================================================
   // BUILD
   // ==========================================================
@@ -751,6 +951,28 @@ class _DashboardScreenState extends State<DashboardScreen>
       ) {
     final fireAlert =
         _anyFireAnywhere;
+
+    if (fireAlert &&
+        !_wasFireAlertActive) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        _setupAlertFloorFocusNodes();
+        if (_fireFloors.isNotEmpty) {
+          _requestAlertFloorFocus(
+            _selectedAlertFloorIndex.clamp(
+              0,
+              _fireFloors.length - 1,
+            ),
+          );
+        }
+
+        _requestAlertCardFocus(0);
+      });
+    }
+
+    _wasFireAlertActive = fireAlert;
 
     return Scaffold(
       backgroundColor:
@@ -841,6 +1063,35 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Live clock -- shown on both Normal and Fire Alert
+                // screens (previously only appeared in the Normal
+                // dashboard's bottom summary bar).
+                SizedBox(
+                  width: 75,
+                  child: Text(
+                    '${_two(_now.hour)}:'
+                        '${_two(_now.minute)}:'
+                        '${_two(_now.second)}\n'
+                        '${_two(_now.day)}/'
+                        '${_two(_now.month)}/'
+                        '${_now.year}',
+                    textAlign:
+                    TextAlign.right,
+                    style: TextStyle(
+                      color: isFire
+                          ? Colors.white70
+                          : AppTheme
+                          .textSecondary,
+                      fontSize: 12,
+                      height: 1.2,
+                      fontWeight:
+                      FontWeight.w600,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -2130,6 +2381,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildFloorBody({
     SiteImageConfig?
     floorOverride,
+    List<PlacedSensor>?
+    sensorsOverride,
   }) {
     final floor =
         floorOverride ??
@@ -2147,6 +2400,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       return _buildFloorImage(
         floor,
         cachedSize,
+        sensorsOverride:
+        sensorsOverride,
       );
     }
 
@@ -2167,6 +2422,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         return _buildFloorImage(
           floor,
           snapshot.data!,
+          sensorsOverride:
+          sensorsOverride,
         );
       },
     );
@@ -2174,11 +2431,21 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildFloorImage(
       SiteImageConfig floor,
-      Size imgSize,
-      ) {
+      Size imgSize, {
+        List<PlacedSensor>?
+        sensorsOverride,
+      }) {
     final aspectRatio =
         imgSize.width /
             imgSize.height;
+
+    // Fire Alert dashboard passes only the currently-firing sensors here
+    // so the floor map matches the alert-card row below it (alerting
+    // devices only). The normal dashboard leaves this null and still
+    // shows every placed sensor on the floor.
+    final pinsToShow =
+        sensorsOverride ??
+            floor.sensors;
 
     return Padding(
       padding:
@@ -2224,7 +2491,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
 
                         for (final sensor
-                        in floor.sensors)
+                        in pinsToShow)
                           _buildPin(
                             sensor,
                             constraints
@@ -2477,21 +2744,95 @@ class _DashboardScreenState extends State<DashboardScreen>
   // FIRE ALERT DASHBOARD
   // ==========================================================
 
+  /// Lower number = higher priority (matches the Devices screen, where
+  /// "Priority 1" is set as the most urgent). A device with no priority
+  /// assigned is treated as lowest priority, so any prioritized alert
+  /// always outranks it.
+  int _priorityRank(PlacedSensor sensor) {
+    final p =
+    ModbusRtu.priorityForSlave(
+      sensor.slaveId,
+    );
+    return p ?? (1 << 30);
+  }
+
+  /// The currently-firing sensor on [floor] with the best (numerically
+  /// lowest) priority, or null if nothing on this floor is firing.
+  PlacedSensor?
+  _bestPrioritySensorForFloor(
+      SiteImageConfig floor,
+      ) {
+    PlacedSensor? best;
+
+    for (final sensor
+    in floor.sensors) {
+      if (_statusFor(sensor) !=
+          _PinLiveStatus.fire) {
+        continue;
+      }
+
+      if (best == null ||
+          _priorityRank(sensor) <
+              _priorityRank(best)) {
+        best = sensor;
+      }
+    }
+
+    return best;
+  }
+
   List<SiteImageConfig>
-  get _fireFloors =>
-      _store.history
-          .where(
-            (floor) =>
-            floor.sensors.any(
-                  (sensor) =>
-              _statusFor(
-                sensor,
-              ) ==
-                  _PinLiveStatus
-                      .fire,
-            ),
-      )
-          .toList();
+  get _fireFloors {
+    final floors =
+        _store.history
+            .where(
+              (floor) =>
+              floor.sensors.any(
+                    (sensor) =>
+                _statusFor(
+                  sensor,
+                ) ==
+                    _PinLiveStatus
+                        .fire,
+              ),
+        )
+            .toList();
+
+    // Show the floor with the highest-priority active fire first, so
+    // it's the one auto-selected (index 0) when multiple floors are
+    // alerting at once. A stable index tie-break keeps ordering
+    // deterministic when priorities match (e.g. several un-prioritized
+    // floors alerting together).
+    final indexed =
+    floors.asMap().entries.toList();
+
+    indexed.sort((a, b) {
+      final aBest =
+      _bestPrioritySensorForFloor(
+        a.value,
+      );
+      final bBest =
+      _bestPrioritySensorForFloor(
+        b.value,
+      );
+      final aRank = aBest != null
+          ? _priorityRank(aBest)
+          : (1 << 30);
+      final bRank = bBest != null
+          ? _priorityRank(bBest)
+          : (1 << 30);
+
+      final cmp =
+      aRank.compareTo(bRank);
+      if (cmp != 0) return cmp;
+
+      return a.key.compareTo(b.key);
+    });
+
+    return indexed
+        .map((e) => e.value)
+        .toList();
+  }
 
   SiteImageConfig?
   get _selectedAlertFloor {
@@ -2512,30 +2853,54 @@ class _DashboardScreenState extends State<DashboardScreen>
     return floors[index];
   }
 
-  PlacedSensor?
-  _alertSensorForFloor(
+  /// Every sensor on [floor] that is currently on fire, sorted by
+  /// priority first (Priority 1 before Priority 2 before unprioritized),
+  /// then by how long each has been alerting (earliest first) -- so
+  /// when one device has several zones (e.g. an MLP's 4 input
+  /// registers) that trip at different times, every active one is
+  /// listed with its own time, not just a single representative sensor.
+  List<PlacedSensor>
+  _firingSensorsForFloor(
       SiteImageConfig floor,
       ) {
-    final selected =
-        _selectedSensor;
+    final firing = floor.sensors
+        .where(
+          (s) =>
+      _statusFor(s) ==
+          _PinLiveStatus.fire,
+    )
+        .toList();
 
-    if (selected != null &&
-        floor.sensors
-            .contains(selected) &&
-        _statusFor(selected) ==
-            _PinLiveStatus.fire) {
-      return selected;
-    }
-
-    for (final sensor
-    in floor.sensors) {
-      if (_statusFor(sensor) ==
-          _PinLiveStatus.fire) {
-        return sensor;
+    firing.sort((a, b) {
+      final rankCmp =
+      _priorityRank(a)
+          .compareTo(
+        _priorityRank(b),
+      );
+      if (rankCmp != 0) {
+        return rankCmp;
       }
-    }
 
-    return null;
+      final aStart =
+      _fireAlertStartTimes[
+      _pinKey(a)];
+      final bStart =
+      _fireAlertStartTimes[
+      _pinKey(b)];
+
+      if (aStart == null &&
+          bStart == null) {
+        return 0;
+      }
+      if (aStart == null) return 1;
+      if (bStart == null) return -1;
+
+      return aStart.compareTo(
+        bStart,
+      );
+    });
+
+    return firing;
   }
 
   Widget _buildFireAlertDashboard() {
@@ -2547,12 +2912,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           .shrink();
     }
 
-    final selectedFloor =
-        _selectedAlertFloor ??
-            fireFloors.first;
+    final selectedIndex = _selectedAlertFloorIndex.clamp(
+      0,
+      fireFloors.length - 1,
+    );
+    final selectedFloor = fireFloors[selectedIndex];
 
-    final alertSensor =
-    _alertSensorForFloor(
+    final firingSensors =
+    _firingSensorsForFloor(
       selectedFloor,
     );
 
@@ -2563,47 +2930,51 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       fireFloors:
       fireFloors,
-      selectedFloorIndex:
-      _selectedAlertFloorIndex
-          .clamp(
-        0,
-        fireFloors.length - 1,
-      ),
-      onFloorSelected:
-          (index) {
-        setState(() {
-          _selectedAlertFloorIndex =
-              index;
-
-          _selectedSensor = null;
-        });
-      },
+      selectedFloorIndex: selectedIndex,
+      focusedFloorIndex: _focusedAlertFloorIndex,
+      floorFocusNodes: _alertFloorFocusNodes,
+      onFloorFocused: _onAlertFloorFocused,
+      onFloorMove: _moveAlertFloorFocus,
+      onFloorSelected: _selectAlertFloor,
       selectedFloor:
       selectedFloor,
       floorBody:
       _buildFloorBody(
         floorOverride:
         selectedFloor,
+        sensorsOverride:
+        firingSensors,
       ),
       alertDeviceDetails:
       _buildAlertDeviceDetails(
-        alertSensor,
+        firingSensors,
         selectedFloor,
       ),
     );
   }
 
   Widget _buildAlertDeviceDetails(
-      PlacedSensor? sensor,
+      List<PlacedSensor> sensors,
       SiteImageConfig floor,
       ) {
+    // Keep the focus-node pool in sync with how many alert cards are
+    // currently shown, so remote left/right can step through exactly
+    // these cards.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) {
+      if (!mounted) return;
+      _setupAlertCardFocusNodes(
+        sensors.length,
+      );
+    });
+
     return Container(
-      height: 68,
+      height: 96,
       width: double.infinity,
       padding:
       const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 10,
+        horizontal: 12,
+        vertical: 8,
       ),
       decoration:
       const BoxDecoration(
@@ -2615,72 +2986,233 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ),
       ),
-      child: sensor == null
-          ? Text(
-        'Fire device information unavailable',
-        style: TextStyle(
-          color: AppTheme
-              .textSecondary,
-          fontSize: 12,
+      child: sensors.isEmpty
+          ? Center(
+        child: Text(
+          'Fire device information unavailable',
+          style: TextStyle(
+            color: AppTheme
+                .textSecondary,
+            fontSize: 12,
+          ),
         ),
       )
-          : Row(
-        crossAxisAlignment:
-        CrossAxisAlignment
-            .center,
-        children: [
-          const Icon(
-            Icons
-                .local_fire_department,
-            color:
-            Colors.redAccent,
-            size: 30,
-          ),
-
+          : Scrollbar(
+        controller:
+        _alertCardScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: ListView.separated(
+          controller:
+          _alertCardScrollController,
+          scrollDirection:
+          Axis.horizontal,
+          itemCount:
+          sensors.length,
+          separatorBuilder:
+              (_, __) =>
           const SizedBox(
-            width: 14,
+            width: 10,
           ),
+          itemBuilder:
+              (context, i) =>
+              _alertDeviceCard(
+                sensors[i],
+                i,
+                sensors.length,
+              ),
+        ),
+      ),
+    );
+  }
 
-          Expanded(
-            child:
-            _alertDetailText(
-              'Device name',
-              sensor.name,
-            ),
-          ),
+  Widget _alertDeviceCard(
+      PlacedSensor sensor,
+      int index,
+      int cardCount,
+      ) {
+    final isSelected =
+        _selectedSensor == sensor;
 
-          Expanded(
-            child:
-            _alertDetailText(
-              'Sensor',
-              sensor.zoneLabel,
-            ),
-          ),
+    final focusNode =
+    index <
+        _alertCardFocusNodes.length
+        ? _alertCardFocusNodes[index]
+        : null;
 
-          Expanded(
-            child:
-            _alertDetailText(
-              'Location',
-              sensor.location,
-            ),
-          ),
+    return Focus(
+      focusNode: focusNode,
+      onFocusChange: (focused) {
+        if (focused) {
+          _focusedAlertCardIndex =
+              index;
+        }
+      },
+      onKeyEvent: (node, event) {
+        if (event
+        is! KeyDownEvent) {
+          return KeyEventResult
+              .ignored;
+        }
 
-          Expanded(
-            child:
-            _alertDetailText(
-              'Time',
-              _formatAlertStartTime(
-                sensor,
+        final key =
+            event.logicalKey;
+
+        // Remote left/right steps between alert cards.
+        if (key ==
+            LogicalKeyboardKey
+                .arrowRight) {
+          if (index <
+              cardCount - 1) {
+            _requestAlertCardFocus(
+              index + 1,
+            );
+          }
+          return KeyEventResult
+              .handled;
+        }
+
+        if (key ==
+            LogicalKeyboardKey
+                .arrowLeft) {
+          if (index > 0) {
+            _requestAlertCardFocus(
+              index - 1,
+            );
+          }
+          return KeyEventResult
+              .handled;
+        }
+
+        if (key ==
+            LogicalKeyboardKey
+                .enter ||
+            key ==
+                LogicalKeyboardKey
+                    .select ||
+            key ==
+                LogicalKeyboardKey
+                    .numpadEnter) {
+          setState(() {
+            _selectedSensor =
+            isSelected
+                ? null
+                : sensor;
+          });
+          return KeyEventResult
+              .handled;
+        }
+
+        return KeyEventResult
+            .ignored;
+      },
+      child: Builder(
+        builder: (context) {
+          final hasFocus =
+              Focus.of(context)
+                  .hasFocus;
+
+          return GestureDetector(
+            onTap: () {
+              Focus.of(context)
+                  .requestFocus();
+
+              setState(() {
+                _selectedSensor =
+                isSelected
+                    ? null
+                    : sensor;
+              });
+            },
+            child: Container(
+              width: 420,
+              padding:
+              const EdgeInsets
+                  .symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              decoration:
+              BoxDecoration(
+                color: isSelected
+                    ? const Color(
+                    0xFF3A0A0A)
+                    : Colors
+                    .transparent,
+                border: Border.all(
+                  color: hasFocus
+                      ? Colors
+                      .white
+                      : isSelected
+                      ? Colors
+                      .redAccent
+                      : AppTheme
+                      .divider,
+                  width: hasFocus
+                      ? 2
+                      : 1,
+                ),
+                borderRadius:
+                BorderRadius
+                    .circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment:
+                CrossAxisAlignment
+                    .center,
+                children: [
+                  const Icon(
+                    Icons
+                        .local_fire_department,
+                    color: Colors
+                        .redAccent,
+                    size: 26,
+                  ),
+
+                  const SizedBox(
+                    width: 10,
+                  ),
+
+                  Expanded(
+                    child:
+                    _alertDetailText(
+                      'Device',
+                      sensor.name,
+                    ),
+                  ),
+
+                  Expanded(
+                    child:
+                    _alertDetailText(
+                      'Sensor',
+                      sensor
+                          .zoneLabel,
+                    ),
+                  ),
+
+                  Expanded(
+                    child:
+                    _alertDetailText(
+                      'Location',
+                      sensor
+                          .location,
+                    ),
+                  ),
+
+                  Expanded(
+                    child:
+                    _alertDetailText(
+                      'Time',
+                      _formatAlertStartTime(
+                        sensor,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-
-          _statChip(
-            'FIRE',
-            color:
-            Colors.redAccent,
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -2698,7 +3230,10 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return '${_two(start.hour)}:'
         '${_two(start.minute)}:'
-        '${_two(start.second)}';
+        '${_two(start.second)}\n'
+        '${_two(start.day)}/'
+        '${_two(start.month)}/'
+        '${start.year}';
   }
 
   Widget _alertDetailText(

@@ -135,6 +135,14 @@ class Rs485Service {
           ModbusRtu.parity,
         );
 
+        // Many USB<->RS485 adapters silently drop the first write(s)
+        // right after open()/setPortParameters() while the underlying
+        // driver finishes initializing. Without this, the very first
+        // scan/poll immediately after connecting can fail across every
+        // slave even though the bus and devices are fine -- a
+        // subsequent scan a few seconds later then works perfectly.
+        await Future.delayed(const Duration(milliseconds: 300));
+
         port = p;
 
         inputSub = port!.inputStream?.listen(
@@ -210,6 +218,18 @@ class Rs485Service {
           (_) async {
         if (_requestRunning || port == null) return;
 
+        // ModbusRtu.slaveIds can be cleared out from under this timer
+        // (e.g. a manual scan just started via DeviceScanning, which
+        // clears the list before it gets a chance to cancel this timer)
+        // both before this tick starts and while it's suspended on the
+        // await below. Guard both spots -- otherwise `% slaveIds.length`
+        // divides by zero once the list is empty.
+        if (ModbusRtu.slaveIds.isEmpty) return;
+
+        if (slavePollingIndex >= ModbusRtu.slaveIds.length) {
+          slavePollingIndex = 0;
+        }
+
         final slaveId = ModbusRtu.slaveIds[slavePollingIndex];
         final model = ModbusRtu.getModelForSlave(slaveId);
 
@@ -218,6 +238,8 @@ class Rs485Service {
           model.startAddress,
           model.quantity,
         );
+
+        if (ModbusRtu.slaveIds.isEmpty) return;
 
         slavePollingIndex =
             (slavePollingIndex + 1) % ModbusRtu.slaveIds.length;
@@ -244,12 +266,14 @@ class Rs485Service {
     _pendingScanSlaveId = null;
     requestTimeoutTimer?.cancel();
 
-    isManualScanRunning = true;
-    pollTimer?.cancel();
-
-    await Future.delayed(const Duration(milliseconds: 200));
-    buffer.clear();
-    _requestRunning = false;
+    // NOTE: does not touch isManualScanRunning/pollTimer -- this probes
+    // a single slave and is called many times in a row by a full scan
+    // (DeviceScanning.scanSlaves). Pausing/resuming background polling
+    // is the caller's responsibility for the whole scan session (see
+    // beginManualScan/endManualScan below); toggling it per-slave here
+    // let the poll timer restart mid-scan as soon as one slave matched,
+    // racing the scan's own requests for the port and corrupting or
+    // eating most of the remaining slaves' responses.
 
     List<int>? result;
 
@@ -269,10 +293,51 @@ class Rs485Service {
       _pendingScanSlaveId = null;
     }
 
+    return result;
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// MANUAL SCAN SESSION (call once around a whole multi-slave scan,
+  /// not per-slave -- see readRegistersForScan's note above)
+  ////////////////////////////////////////////////////////////
+
+  Future<void> beginManualScan() async {
+    isManualScanRunning = true;
+    pollTimer?.cancel();
+
+    // A background poll request may already be in flight (sent, and
+    // still waiting on its response) at the exact moment a scan starts.
+    // Cancelling the timer above only stops *future* ticks -- it does
+    // NOT abort that outstanding request. If we don't wait for it to
+    // actually resolve (or time out) before proceeding, its response
+    // can land on the wire right as the scan sends its own first
+    // request and collide with/corrupt it. That's why it's consistently
+    // the *first* slave probed in a scan that tends to fail, while every
+    // later slave (once the bus is clean) works fine.
+    const maxWait = Duration(milliseconds: 1600);
+    const step = Duration(milliseconds: 50);
+    var waited = Duration.zero;
+    while (_requestRunning && waited < maxWait) {
+      await Future.delayed(step);
+      waited += step;
+    }
+
+    requestTimeoutTimer?.cancel();
+    _requestRunning = false;
+    buffer.clear();
+    _pendingScanCompleter = null;
+    _pendingScanSlaveId = null;
+
+    // Let anything still settling on the wire clear out before the scan
+    // starts sending its own requests.
+    await Future.delayed(const Duration(milliseconds: 200));
+    buffer.clear();
+    _requestRunning = false;
+  }
+
+  void endManualScan() {
     isManualScanRunning = false;
     _restartPolling();
-
-    return result;
   }
 
   ////////////////////////////////////////////////////////////
