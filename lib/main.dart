@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/dashboard/dashboard_page.dart';
 import 'screens/home_screen.dart';
 import 'services/config/configuration_store.dart';
 import 'services/rs485/rs485_service.dart';
@@ -68,8 +69,20 @@ class _RaqaOneViewAppState extends State<RaqaOneViewApp> {
           ),
           themeMode: darkModeEnabled ? ThemeMode.dark : ThemeMode.light,
 
-          home: HomeScreen(
-            manager: manager,
+          // Skip the menu on launch if a site image is already configured
+          // (saved from a previous session) — jump straight to the
+          // Dashboard instead. ConfigurationStore.loadFromDisk() (kicked
+          // off in initState) is async, so this listens for its
+          // notifyListeners() call and re-decides once the saved config
+          // (if any) has finished loading.
+          home: AnimatedBuilder(
+            animation: ConfigurationStore.instance,
+            builder: (context, _) {
+              final isConfigured = ConfigurationStore.instance.active != null;
+              return isConfigured
+                  ? DashboardScreen(manager: manager)
+                  : HomeScreen(manager: manager);
+            },
           ),
         );
       },

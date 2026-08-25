@@ -288,6 +288,12 @@ class Rs485Service {
     requestTimeoutTimer?.cancel();
     requestTimeoutTimer = Timer(const Duration(milliseconds: 1500), () {
       _requestRunning = false;
+      // No response arrived in time. Drop whatever partial/stale bytes
+      // are sitting in the buffer -- otherwise they can misalign parsing
+      // of the *next* device's response and desync the parser
+      // indefinitely (a device coming back online would then keep
+      // failing its CRC check and look permanently "offline").
+      buffer.clear();
     });
 
     final frame = <int>[
@@ -336,9 +342,19 @@ class Rs485Service {
       final crcCalc = crc16(Uint8List.fromList(body));
 
       if (crcCalc != crcRx) {
+        // Frame boundary is mis-aligned -- likely a stray/partial byte
+        // left over from a device that was offline or timed out
+        // mid-response. Drop only the first byte and try to re-sync on
+        // the next one, rather than wiping the whole buffer. Discarding
+        // everything here would throw away a legitimate trailing frame
+        // too, and if the desync isn't broken, every subsequent valid
+        // response (including from a device that just came back online)
+        // keeps failing this same check forever -- which is what makes
+        // a recovered device look stuck "offline" until something
+        // unrelated happens to reset the buffer.
         buffer.clear();
-        _requestRunning = false;
-        return;
+        buffer.add(bytes.sublist(1));
+        continue;
       }
 
       final slaveId = frame[0];

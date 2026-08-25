@@ -93,7 +93,7 @@ class _FireFloorList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 190,
-      color: AppTheme.panel,
+      color: const Color(0xFF200404),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

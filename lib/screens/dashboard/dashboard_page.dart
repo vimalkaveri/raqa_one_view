@@ -22,6 +22,7 @@ import '../../services/rs485/modbus_rtu.dart';
 import '../../services/rs485/rs485_service.dart';
 import '../../services/settings/app_settings.dart';
 import '../../utils/app_theme.dart';
+import '../home_screen.dart';
 import 'normal_dashboard.dart';
 import 'fire_alert_dashboard.dart';
 
@@ -797,7 +798,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         horizontal: 14,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.card,
+        color: isFire ? const Color(0xFF2A0606) : AppTheme.card,
         border: Border(
           bottom: BorderSide(
             color: AppTheme.divider,
@@ -882,6 +883,30 @@ class _DashboardScreenState extends State<DashboardScreen>
                         : 'Mute alarm',
                     onPressed: _toggleMute,
                   ),
+
+                const SizedBox(width: 4),
+
+                // Back to the main menu -- lets the user add another
+                // floor image (Configuration) or scan for a new device
+                // (Devices) without leaving the app. The Dashboard is the
+                // launch screen once a config exists, so it has no back
+                // button of its own; this is the way back to that menu.
+                IconButton(
+                  icon: Icon(
+                    Icons.menu,
+                    color: AppTheme.textSecondary,
+                  ),
+                  tooltip: 'Menu',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            HomeScreen(manager: widget.manager),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -2582,6 +2607,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       decoration:
       const BoxDecoration(
+        color: Color(0xFF200404),
         border: Border(
           top: BorderSide(
             color:
