@@ -12,7 +12,7 @@
     <!-- Android TV support -->
     <uses-feature
         android:name="android.software.leanback"
-        android:required="true" />
+        android:required="false" />
 
     <!-- Touchscreen not required for TV -->
     <uses-feature
@@ -20,9 +20,11 @@
         android:required="false" />
 
     <application
-        android:label="raqa_one_view"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:label="RAQA ONE VIEW"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner"
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
