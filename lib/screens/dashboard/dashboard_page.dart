@@ -108,10 +108,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   final List<FocusNode> _deviceFocusNodes = [];
 
-  final List<FocusNode> _alertFloorFocusNodes = [];
-
-  int _focusedAlertFloorIndex = 0;
-
   final FocusNode _floorHeaderFocusNode =
   FocusNode(debugLabel: 'floor_header');
 
@@ -211,7 +207,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupFocusNodes();
-      _setupAlertFloorFocusNodes();
 
       if (_store.history.isNotEmpty) {
         _requestFloorFocus(0);
@@ -256,64 +251,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     while (_deviceFocusNodes.length > deviceCount) {
       _deviceFocusNodes.removeLast().dispose();
     }
-  }
-
-  void _setupAlertFloorFocusNodes() {
-    final floorCount = _fireFloors.length;
-
-    while (_alertFloorFocusNodes.length < floorCount) {
-      final index = _alertFloorFocusNodes.length;
-      _alertFloorFocusNodes.add(
-        FocusNode(debugLabel: 'alert_floor_$index'),
-      );
-    }
-
-    while (_alertFloorFocusNodes.length > floorCount) {
-      _alertFloorFocusNodes.removeLast().dispose();
-    }
-
-    if (floorCount == 0) {
-      _focusedAlertFloorIndex = 0;
-    } else if (_focusedAlertFloorIndex >= floorCount) {
-      _focusedAlertFloorIndex = floorCount - 1;
-    }
-  }
-
-  void _requestAlertFloorFocus(int index) {
-    _setupAlertFloorFocusNodes();
-    if (_alertFloorFocusNodes.isEmpty) return;
-
-    final safeIndex = index.clamp(0, _alertFloorFocusNodes.length - 1);
-    _focusedAlertFloorIndex = safeIndex;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || safeIndex >= _alertFloorFocusNodes.length) return;
-      _alertFloorFocusNodes[safeIndex].requestFocus();
-    });
-  }
-
-  void _onAlertFloorFocused(int index) {
-    if (!mounted || index < 0 || index >= _fireFloors.length) return;
-    setState(() {
-      _focusedAlertFloorIndex = index;
-    });
-  }
-
-  void _moveAlertFloorFocus(int index) {
-    if (index < 0 || index >= _fireFloors.length) return;
-    _requestAlertFloorFocus(index);
-  }
-
-  void _selectAlertFloor(int index) {
-    if (index < 0 || index >= _fireFloors.length) return;
-
-    setState(() {
-      _selectedAlertFloorIndex = index;
-      _focusedAlertFloorIndex = index;
-      _selectedSensor = null;
-    });
-
-    _requestAlertFloorFocus(index);
   }
 
   void _setupAlertCardFocusNodes(
@@ -551,10 +488,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       node.dispose();
     }
 
-    for (final node in _alertFloorFocusNodes) {
-      node.dispose();
-    }
-
     for (final node in _deviceFocusNodes) {
       node.dispose();
     }
@@ -613,15 +546,17 @@ class _DashboardScreenState extends State<DashboardScreen>
           : _store.history.length - 1;
     }
 
-    if (_selectedAlertFloorIndex >= _fireFloors.length) {
+    if (_selectedAlertFloorIndex >=
+        _store.history.length) {
       _selectedAlertFloorIndex =
-      _fireFloors.isEmpty ? 0 : _fireFloors.length - 1;
+      _store.history.isEmpty
+          ? 0
+          : _store.history.length - 1;
     }
 
     _prunePinFocusNodes();
 
     _setupFocusNodes();
-    _setupAlertFloorFocusNodes();
 
     setState(() {});
   }
@@ -954,20 +889,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     if (fireAlert &&
         !_wasFireAlertActive) {
+      // Fire alert just started -- give remote-control focus to the
+      // first alert card so left/right immediately works without the
+      // user having to navigate there manually first.
       WidgetsBinding.instance
           .addPostFrameCallback((_) {
         if (!mounted) return;
-
-        _setupAlertFloorFocusNodes();
-        if (_fireFloors.isNotEmpty) {
-          _requestAlertFloorFocus(
-            _selectedAlertFloorIndex.clamp(
-              0,
-              _fireFloors.length - 1,
-            ),
-          );
-        }
-
         _requestAlertCardFocus(0);
       });
     }
@@ -2912,11 +2839,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           .shrink();
     }
 
-    final selectedIndex = _selectedAlertFloorIndex.clamp(
-      0,
-      fireFloors.length - 1,
-    );
-    final selectedFloor = fireFloors[selectedIndex];
+    final selectedFloor =
+        _selectedAlertFloor ??
+            fireFloors.first;
 
     final firingSensors =
     _firingSensorsForFloor(
@@ -2930,12 +2855,21 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       fireFloors:
       fireFloors,
-      selectedFloorIndex: selectedIndex,
-      focusedFloorIndex: _focusedAlertFloorIndex,
-      floorFocusNodes: _alertFloorFocusNodes,
-      onFloorFocused: _onAlertFloorFocused,
-      onFloorMove: _moveAlertFloorFocus,
-      onFloorSelected: _selectAlertFloor,
+      selectedFloorIndex:
+      _selectedAlertFloorIndex
+          .clamp(
+        0,
+        fireFloors.length - 1,
+      ),
+      onFloorSelected:
+          (index) {
+        setState(() {
+          _selectedAlertFloorIndex =
+              index;
+
+          _selectedSensor = null;
+        });
+      },
       selectedFloor:
       selectedFloor,
       floorBody:
@@ -3228,12 +3162,24 @@ class _DashboardScreenState extends State<DashboardScreen>
       return '-';
     }
 
-    return '${_two(start.hour)}:'
-        '${_two(start.minute)}:'
-        '${_two(start.second)}\n'
-        '${_two(start.day)}/'
-        '${_two(start.month)}/'
-        '${start.year}';
+    // Show elapsed time since the alert triggered (e.g. "5min", "1hrs")
+    // instead of the absolute trigger clock time / date.
+    var elapsed =
+        _now.difference(start);
+
+    if (elapsed.isNegative) {
+      elapsed = Duration.zero;
+    }
+
+    if (elapsed.inMinutes < 1) {
+      return '${elapsed.inSeconds}sec';
+    }
+
+    if (elapsed.inHours < 1) {
+      return '${elapsed.inMinutes}min';
+    }
+
+    return '${elapsed.inHours}hrs';
   }
 
   Widget _alertDetailText(
